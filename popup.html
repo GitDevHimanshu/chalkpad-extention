@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <div class="header-brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">Haziri</span>
+        <span class="brand-sub">Attendance Helper</span>
+      </div>
+    </div>
+    <div class="teacher-id-wrap" id="teacherDisplayWrap">
+      <span class="teacher-id-badge" id="teacherBadge">Not set</span>
+      <span class="teacher-id-edit-ico">✎</span>
+    </div>
+    <div class="teacher-id-edit-wrap" id="teacherEditWrap" style="display:none">
+      <input type="text" id="teacherIdInput" class="teacher-id-edit-input"
+        placeholder="Teacher ID" autocomplete="off" spellcheck="false">
+      <button id="teacherSaveBtn" class="teacher-id-save-btn">Save</button>
+    </div>
+  </header>
+
+  <!-- ── Tab Nav ── -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="attendance">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+      Attendance
+    </button>
+    <button class="tab-btn" data-tab="formula">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="m4 6 2-2 2 2"/><path d="M6 4v14.5"/><path d="m20 6-2-2-2 2"/><path d="M18 4v14.5"/><path d="M4 20h8"/><path d="M14 20h6"/><path d="M4 14h4"/><path d="M14 10h6"/></svg>
+      Formula
+    </button>
+    <button class="tab-btn" data-tab="sheet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+      Sheet Format
+    </button>
+    <button class="tab-btn" data-tab="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History
+    </button>
+  </nav>
+
+  <!-- ══════════════════════════════
+       TAB: ATTENDANCE
+  ══════════════════════════════ -->
+  <div id="tab-attendance" class="tab-panel" data-state="input">
+
+    <!-- STATE: input -->
+    <div id="state-input" class="state">
+      <p class="input-label">Paste config object</p>
+      <div class="textarea-wrap">
+        <textarea id="attendanceInput" spellcheck="false"
+          placeholder='{info:{timeTable:"Jan - June 2026",periodSlot:"SEMESTER-II",period:[1,2],date:"17/03/2026",class:"2024-BE-CSE-Sem-4",subject:"24CS014 (...)",group:"U2024-CSE-E"},absentees:[]}'></textarea>
+        <span class="tag">JSON</span>
+      </div>
+      <p id="error" class="err-msg"></p>
+      <div class="action-bar">
+        <button id="proceedBtn" class="btn btn-accent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Run Automation
+        </button>
+        <button id="cancelBtn" class="btn btn-flat">Dismiss</button>
+      </div>
+    </div>
+
+    <!-- STATE: running -->
+    <div id="state-running" class="state" style="display:none;">
+      <div class="running-wrap">
+        <div class="progress-track">
+          <div class="progress-bar"></div>
+        </div>
+        <p class="running-title">Marking Attendance<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span></p>
+        <p class="running-sub">Filling the form on Chalkpad.<br>Don't interact with the page.</p>
+        <button id="cancelBtn2" class="btn btn-danger-outline">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Cancel
+        </button>
+      </div>
+    </div>
+
+    <!-- STATE: done -->
+    <div id="state-done" class="state" style="display:none;">
+      <!-- Legacy hidden table — IDs required by popup.js -->
+      <table id="doneTable" style="display:none;position:absolute;" aria-hidden="true">
+        <tr><td id="doneClass"></td></tr>
+        <tr><td id="doneSubject"></td></tr>
+        <tr><td id="doneGroup"></td></tr>
+        <tr><td id="doneDate"></td></tr>
+        <tr><td id="donePeriods"></td></tr>
+        <tr><td id="doneTotal"></td></tr>
+        <tr><td id="donePresent"></td></tr>
+        <tr><td id="doneAbsentees"></td></tr>
+      </table>
+
+      <h3 class="done-heading">Ready to Submit</h3>
+
+      <table class="info-table">
+        <tr><td class="it-label">Class</td><td class="it-val" id="v-class">—</td></tr>
+        <tr><td class="it-label">Subject</td><td class="it-val" id="v-subject">—</td></tr>
+        <tr><td class="it-label">Group</td><td class="it-val" id="v-group">—</td></tr>
+        <tr><td class="it-label">Date</td><td class="it-val" id="v-date">—</td></tr>
+        <tr><td class="it-label">Periods</td><td class="it-val" id="v-periods">—</td></tr>
+        <tr><td class="it-label">Total</td><td class="it-val" id="v-total">—</td></tr>
+        <tr class="it-row-present">
+          <td class="it-label">Present</td><td class="it-val" id="v-present">—</td>
+        </tr>
+        <tr class="it-row-absent">
+          <td class="it-label">Absent</td><td class="it-val it-mono" id="v-absentees">none</td>
+        </tr>
+      </table>
+
+      <div class="action-bar">
+        <button id="submitBtn" class="btn btn-green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
+          Submit
+        </button>
+        <button id="closeBtn" class="btn btn-flat">Close</button>
+      </div>
+    </div>
+
+    <!-- STATE: already marked -->
+    <div id="state-already" class="state" style="display:none;">
+      <div class="already-wrap">
+        <div class="already-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <h3 class="already-title">Already Marked</h3>
+        <p class="already-sub">Attendance for this session has already been submitted.</p>
+        <button id="alreadyCloseBtn" class="btn btn-accent btn-full" style="margin-top:16px;">Try Again</button>
+      </div>
+    </div>
+
+  </div><!-- /tab-attendance -->
+
+  <!-- ══════════════════════════════
+       TAB: FORMULA GENERATOR
+  ══════════════════════════════ -->
+  <div id="tab-formula" class="tab-panel" style="display:none;">
+
+    <p class="formula-intro">Fill in your sheet structure to generate a formula. Paste it in your <strong>start column</strong> and drag right.</p>
+
+    <div class="form-stack">
+      <div class="form-grid-3">
+        <div class="field">
+          <label>Start Col</label>
+          <input type="text" id="startCol" maxlength="3" placeholder="H">
+          <span class="field-hint">first att. col</span>
+        </div>
+        <div class="field">
+          <label>Row Start</label>
+          <input type="number" id="rowStart" value="5" min="1">
+          <span class="field-hint">first student</span>
+        </div>
+        <div class="field">
+          <label>Row End</label>
+          <input type="number" id="rowEnd" placeholder="70" min="1">
+          <span class="field-hint">last student</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Class</label>
+        <input type="text" id="settingsClass" placeholder="2024-BE-CSE-Sem-4">
+      </div>
+      <div class="field">
+        <label>Subject</label>
+        <input type="text" id="settingsSubject" placeholder="24CS014 (Front-end Frameworks) - Universal">
+      </div>
+      <div class="field">
+        <label>Group / Section</label>
+        <input type="text" id="settingsGroup" placeholder="U2024-CSE-A">
+      </div>
+      <div class="form-grid-2">
+        <div class="field">
+          <label>Time Table</label>
+          <input type="text" id="settingsTimeTable" placeholder="Jan - June 2026">
+          <span class="field-hint">e.g. Jan - June 2026</span>
+        </div>
+        <div class="field">
+          <label>Period Slot</label>
+          <input type="text" id="settingsPeriodSlot" placeholder="SEMESTER-II">
+          <span class="field-hint">e.g. SEMESTER-II</span>
+        </div>
+      </div>
+      <button id="generateBtn" class="btn btn-accent btn-full">
+        <span id="generateBtnText">Generate Formula</span>
+        <span id="generateBtnSpinner" class="btn-spinner" style="display:none;"></span>
+      </button>
+    </div>
+
+  </div><!-- /tab-formula -->
+
+  <!-- ══════════════════════════════
+       TAB: SHEET FORMAT
+  ══════════════════════════════ -->
+  <div id="tab-sheet" class="tab-panel" style="display:none;">
+
+    <!-- Download Template Button -->
+    <div class="template-download-wrap">
+      <div class="template-info">
+        <span class="template-icon">📊</span>
+        <div>
+          <span class="template-title">Attendance Sheet Template</span>
+          <span class="template-sub">Pre-formatted Excel sheet ready to use</span>
+        </div>
+      </div>
+      <button id="templateDownloadBtn" class="template-btn">
+        ↓ Download
+      </button>
+    </div>
+
+    <div class="sheet-scroll">
+      <table class="sheet-tbl">
+        <thead>
+          <tr>
+            <th class="sh-corner"></th>
+            <th class="sh-ch">A</th><th class="sh-ch">B</th><th class="sh-ch">C</th>
+            <th class="sh-ch sh-sep">…</th>
+            <th class="sh-ch sh-att">H</th><th class="sh-ch sh-att">I</th><th class="sh-ch sh-att">J</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="sh-rh">1</td>
+            <td></td><td></td><td></td><td class="sh-sep"></td>
+            <td class="sh-date">22 - Jan</td><td class="sh-date">22 - Jan</td><td class="sh-date">13 - Mar</td>
+          </tr>
+          <tr>
+            <td class="sh-rh">2</td>
+            <td></td><td></td><td></td><td class="sh-sep"></td>
+            <td class="sh-day">Thursday</td><td class="sh-day">Thursday</td><td class="sh-day">Friday</td>
+          </tr>
+          <tr>
+            <td class="sh-rh">3</td>
+            <td></td><td></td><td></td><td class="sh-sep"></td>
+            <td class="sh-time">9:30–10:20<br><b>1</b></td>
+            <td class="sh-time">10:20–11:10<br><b>2</b></td>
+            <td class="sh-time">3:20–4:10<br><b>8</b></td>
+          </tr>
+          <tr>
+            <td class="sh-rh">4</td>
+            <td></td><td></td><td></td><td class="sh-sep"></td>
+            <td class="sh-cnt">49</td><td class="sh-cnt">49</td><td class="sh-cnt">12</td>
+          </tr>
+          <tr>
+            <td class="sh-rh">5</td>
+            <td class="sh-c">1</td><td class="sh-c sh-roll">2411981001</td><td class="sh-c sh-name">AALAM</td>
+            <td class="sh-sep"></td>
+            <td class="sh-p">P</td><td class="sh-p">P</td><td class="sh-a">A</td>
+          </tr>
+          <tr>
+            <td class="sh-rh">6</td>
+            <td class="sh-c">2</td><td class="sh-c sh-roll">2411981002</td><td class="sh-c sh-name">AANISH</td>
+            <td class="sh-sep"></td>
+            <td class="sh-a">A</td><td class="sh-a">A</td><td class="sh-p">P</td>
+          </tr>
+          <tr>
+            <td class="sh-rh">7</td>
+            <td class="sh-c">3</td><td class="sh-c sh-roll">2411981003</td><td class="sh-c sh-name">AARAV…</td>
+            <td class="sh-sep"></td>
+            <td class="sh-p">P</td><td class="sh-p">P</td><td class="sh-p">P</td>
+          </tr>
+          <tr><td class="sh-dots" colspan="8">⋮</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="legend-list">
+      <div class="leg"><span class="leg-swatch" style="--c:#fde68a;--b:#f59e0b;"></span>Row 1 — Date label</div>
+      <div class="leg"><span class="leg-swatch" style="--c:#bbf7d0;--b:#22c55e;"></span>Row 3 — Time slot + period number</div>
+      <div class="leg"><span class="leg-swatch" style="--c:#e9d5ff;--b:#a855f7;"></span>Row 4 — Count (formula ignores this)</div>
+      <div class="leg"><span class="leg-swatch" style="--c:#bfdbfe;--b:#3b82f6;"></span>Col B — Roll numbers for absent list</div>
+      <div class="leg"><span class="leg-p">P</span>&nbsp;= Present &nbsp;·&nbsp; <span class="leg-a">A</span>&nbsp;= Absent</div>
+    </div>
+
+
+  </div><!-- /tab-sheet -->
+
+  <!-- ══════════════════════════════
+       TAB: HISTORY
+  ══════════════════════════════ -->
+  <div id="tab-history" class="tab-panel hist-panel" style="display:none;">
+    <div class="hist-sticky">
+      <div class="hist-toolbar">
+        <span class="hist-count" id="histCount">0 sessions</span>
+        <button id="histClearBtn" class="hist-clear-btn" title="Refresh from server">↻ Refresh</button>
+      </div>
+      <div class="hist-search-wrap">
+        <svg class="hist-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="histSearch" class="hist-search" placeholder="Search by group, subject or date…" autocomplete="off" spellcheck="false">
+        <button id="histSearchClear" class="hist-search-x" style="display:none;" title="Clear">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="hist-scroll-area">
+      <div id="histEmpty" class="hist-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <p>No sessions yet.</p>
+        <span>Submitted attendance will appear here.</span>
+      </div>
+      <div id="histNoResults" class="hist-empty" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <p>No results</p>
+        <span id="histNoResultsMsg">No sessions match your search.</span>
+      </div>
+      <div id="histList" class="hist-list"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       FORMULA MODAL OVERLAY
+  ══════════════════════════════ -->
+  <div id="formulaModal" class="modal-overlay" style="display:none;" aria-modal="true">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title">Generated Formula</span>
+        <button id="formulaModalClose" class="modal-close" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <p class="modal-hint">Paste in your <strong>start column</strong>, then drag right across all attendance columns.</p>
+      <textarea id="formulaOutput" readonly spellcheck="false" class="modal-textarea"></textarea>
+      <button id="copyBtn" class="btn btn-accent btn-full">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+        <span id="copyBtnText">Copy Formula</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="template.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
