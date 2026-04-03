@@ -64,6 +64,14 @@ function showTab(id) {
       panel.classList.remove('tab-exit');
       void panel.offsetWidth;
       panel.classList.add('tab-enter');
+      
+      // Auto focus relevant inputs
+      if (id === 'attendance') {
+        const stateInput = document.getElementById('state-input');
+        if (stateInput && stateInput.style.display !== 'none') {
+          document.getElementById('attendanceInput').focus();
+        }
+      }
     } else {
       panel.style.display = 'none';
       panel.classList.remove('tab-enter');
@@ -104,7 +112,8 @@ function closePopup() {
 document.getElementById('cancelBtn').onclick       = closePopup;
 document.getElementById('cancelBtn2').onclick      = closePopup;
 document.getElementById('closeBtn').onclick        = () => window.parent.postMessage({ type: 'CLOSE_POPUP' }, '*');
-document.getElementById('submitBtn').onclick = () => {
+
+const handleSubmit = () => {
   if (_pendingHistoryEntry) {
     _pendingHistoryEntry.submittedAt = new Date().toISOString();
     saveHistoryEntry(_pendingHistoryEntry);
@@ -113,6 +122,21 @@ document.getElementById('submitBtn').onclick = () => {
   }
   window.parent.postMessage({ type: 'SUBMIT_ATTENDANCE' }, '*');
 };
+
+document.getElementById('submitBtn').onclick = handleSubmit;
+
+// Allow Enter to trigger Submit on Done state (if no input is focused)
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const doneState = document.getElementById('state-done');
+    if (doneState && doneState.style.display !== 'none') {
+      // Avoid if an input is focused (though there aren't any on done state)
+      if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        handleSubmit();
+      }
+    }
+  }
+});
 document.getElementById('alreadyCloseBtn').onclick = () => showState('state-input');
 
 document.getElementById('proceedBtn').onclick = () => {
@@ -126,6 +150,13 @@ document.getElementById('proceedBtn').onclick = () => {
   showState('state-running');
   window.parent.postMessage({ type: 'RUN_ATTENDANCE', raw: input }, '*');
 };
+
+document.getElementById('attendanceInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('proceedBtn').click();
+  }
+});
 
 /* ════════════════════════════
    FORMULA — SETTINGS PERSISTENCE
@@ -145,6 +176,10 @@ function loadSettings() {
 }
 loadSettings();
 loadTeacherId();
+
+// Auto focus attendance input on load
+const mainInput = document.getElementById('attendanceInput');
+if (mainInput) mainInput.focus();
 
 document.getElementById('generateBtn').onclick = () => {
   const sc  = document.getElementById('startCol').value.trim().toUpperCase();
