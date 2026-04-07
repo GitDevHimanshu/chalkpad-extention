@@ -3,9 +3,28 @@
 ════════════════════════════ */
 const SERVER_URL = 'https://chalkpad-attendance.onrender.com';
 
-function postToServer(entry) {
+async function postToServer(entry) {
   const teacherId = (localStorage.getItem('haziriTeacherId') || 'default').trim().toLowerCase();
-  window.parent.postMessage({ type: 'RELAY_TO_SERVER', entry: { ...entry, teacherId } }, '*');
+  const payload   = { ...entry, teacherId };
+
+  // Use direct extension messaging if available
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'SAVE_SESSION', entry: payload }, (response) => {
+        if (response && response.success) {
+          console.log('[Popup] Saved to server directly');
+          resolve({ success: true });
+        } else {
+          console.warn('[Popup] Direct save failed:', response?.error);
+          resolve({ success: false, error: response?.error });
+        }
+      });
+    });
+  }
+
+  // Fallback to relay through content script (legacy)
+  window.parent.postMessage({ type: 'RELAY_TO_SERVER', entry: payload }, '*');
+  return { success: true }; // Assume success for relay
 }
 
 
@@ -113,14 +132,42 @@ document.getElementById('cancelBtn').onclick       = closePopup;
 document.getElementById('cancelBtn2').onclick      = closePopup;
 document.getElementById('closeBtn').onclick        = () => window.parent.postMessage({ type: 'CLOSE_POPUP' }, '*');
 
-const handleSubmit = () => {
+const handleSubmit = async () => {
+  const btn = document.getElementById('submitBtn');
+  const originalText = btn.textContent;
+
   if (_pendingHistoryEntry) {
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
     _pendingHistoryEntry.submittedAt = new Date().toISOString();
     saveHistoryEntry(_pendingHistoryEntry);
-    postToServer(_pendingHistoryEntry);   // also save to MongoDB
+    
+    try {
+      const res = await postToServer(_pendingHistoryEntry);
+      if (!res.success) {
+        console.warn('[Attendance] Server save error:', res.error);
+        // We'll proceed to submit anyway but log it
+      }
+    } catch (err) {
+      console.error('[Attendance] Server post failed:', err);
+    }
+    
     _pendingHistoryEntry = null;
+    
+    // Quick success feedback
+    btn.textContent = 'Saved ✓';
+    await new Promise(r => setTimeout(r, 600));
   }
+
   window.parent.postMessage({ type: 'SUBMIT_ATTENDANCE' }, '*');
+  
+  // Restore button just in case
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }, 1000);
 };
 
 document.getElementById('submitBtn').onclick = handleSubmit;

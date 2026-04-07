@@ -26,6 +26,9 @@
   }
 
   window.addEventListener("message", (event) => {
+    // Safety check for cross-origin messages
+    if (!event.data || typeof event.data !== 'object') return;
+
     const type = event.data.type;
 
     if (type === "CANCEL_ATTENDANCE" || type === "CLOSE_POPUP") {
@@ -33,14 +36,14 @@
       removePopup();
       return;
     }
+
     // Relay server save from popup iframe → background service worker
     if (type === 'RELAY_TO_SERVER') {
-      chrome.runtime.sendMessage({ type: 'SAVE_SESSION', entry: event.data.entry })
-        .then(data => {
-          if (data && data.success) console.log('[Attendance] Saved to server, id:', data.id);
-          else console.warn('[Attendance] Server save failed:', data && data.error);
-        })
-        .catch(err => console.warn('[Attendance] Could not save to server:', err.message));
+      console.log('[Attendance] Relaying save request to background...');
+      chrome.runtime.sendMessage({ type: 'SAVE_SESSION', entry: event.data.entry }, (data) => {
+        if (data && data.success) console.log('[Attendance] Saved to server, id:', data.id);
+        else console.warn('[Attendance] Server save failed:', data && data.error);
+      });
       return;
     }
 
