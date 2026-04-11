@@ -187,8 +187,15 @@ window.addEventListener('keydown', (e) => {
 document.getElementById('alreadyCloseBtn').onclick = () => showState('state-input');
 
 document.getElementById('proceedBtn').onclick = () => {
-  const input   = document.getElementById('attendanceInput').value.trim();
-  const errorEl = document.getElementById('error');
+  const teacherId = (localStorage.getItem('haziriTeacherId') || '').trim();
+  const input     = document.getElementById('attendanceInput').value.trim();
+  const errorEl   = document.getElementById('error');
+
+  if (!teacherId) {
+    errorEl.textContent = 'Please set your Teacher ID in the header first.';
+    showTeacherEdit();
+    return;
+  }
   if (!input) { errorEl.textContent = 'Please paste a config.'; return; }
   if (!input.startsWith('{') || !input.endsWith('}')) {
     errorEl.textContent = 'Config must be a { ... } object.'; return;
