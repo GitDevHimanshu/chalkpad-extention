@@ -215,9 +215,21 @@ document.getElementById('attendanceInput').addEventListener('keydown', (e) => {
 /* ════════════════════════════
    FORMULA — SETTINGS PERSISTENCE
 ════════════════════════════ */
-function loadSettings() {
+async function loadSettings() {
   try {
-    const saved = JSON.parse(localStorage.getItem('attendanceSettings') || '{}');
+    // Try session storage first (as requested: retain until browser shut)
+    let saved = {};
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+      const data = await chrome.storage.session.get('attendanceSettings');
+      saved = data.attendanceSettings || {};
+    }
+    
+    // Fallback/Legacy: check localStorage if session is empty
+    if (Object.keys(saved).length === 0) {
+      saved = JSON.parse(localStorage.getItem('attendanceSettings') || '{}');
+    }
+
+    if (saved.attendanceInput)    document.getElementById('attendanceInput').value    = saved.attendanceInput;
     if (saved.startCol)           document.getElementById('startCol').value           = saved.startCol;
     if (saved.rowStart)           document.getElementById('rowStart').value           = saved.rowStart;
     if (saved.rowEnd)             document.getElementById('rowEnd').value             = saved.rowEnd;
@@ -228,6 +240,43 @@ function loadSettings() {
     if (saved.settingsPeriodSlot) document.getElementById('settingsPeriodSlot').value = saved.settingsPeriodSlot;
   } catch(_) {}
 }
+
+function saveSettings() {
+  const input = document.getElementById('attendanceInput').value.trim();
+  const sc  = document.getElementById('startCol').value.trim().toUpperCase();
+  const rs  = document.getElementById('rowStart').value.trim() || '5';
+  const re  = document.getElementById('rowEnd').value.trim();
+  const cls = document.getElementById('settingsClass').value.trim();
+  const sub = document.getElementById('settingsSubject').value.trim();
+  const grp = document.getElementById('settingsGroup').value.trim();
+  const tt  = document.getElementById('settingsTimeTable').value.trim();
+  const ps  = document.getElementById('settingsPeriodSlot').value.trim();
+
+  const settings = { 
+    attendanceInput: input,
+    startCol: sc, rowStart: rs, rowEnd: re,
+    settingsClass: cls, settingsSubject: sub, settingsGroup: grp,
+    settingsTimeTable: tt, settingsPeriodSlot: ps 
+  };
+
+  try {
+    // Save to session storage (persists until browser shut)
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+      chrome.storage.session.set({ 'attendanceSettings': settings });
+    }
+    // Also keep in localStorage for now to ensure continuity, 
+    // but the session storage will take precedence on next load.
+    localStorage.setItem('attendanceSettings', JSON.stringify(settings));
+  } catch(_) {}
+}
+
+// Attach auto-save listeners to all fields
+['attendanceInput', 'startCol', 'rowStart', 'rowEnd', 'settingsClass', 
+ 'settingsSubject', 'settingsGroup', 'settingsTimeTable', 'settingsPeriodSlot'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', saveSettings);
+});
+
 loadSettings();
 loadTeacherId();
 
@@ -256,13 +305,7 @@ document.getElementById('generateBtn').onclick = () => {
   spinner.style.display = 'inline-block';
 
   setTimeout(() => {
-    try {
-      localStorage.setItem('attendanceSettings', JSON.stringify(
-        { startCol: sc, rowStart: rs, rowEnd: re,
-          settingsClass: cls, settingsSubject: sub, settingsGroup: grp,
-          settingsTimeTable: tt, settingsPeriodSlot: ps }
-      ));
-    } catch(_) {}
+    saveSettings();
 
     const ttPart = tt ? `timeTable:""${tt}"",` : '';
     const psPart = ps ? `periodSlot:""${ps}"",` : '';
