@@ -163,11 +163,21 @@
 
         step(() => {
           periodArray.forEach(slot => {
-            const v = 16 + slot;
-            const o = sel.querySelector(`option[value="${v}"]`);
-            if (o) o.selected = true;
-            const cb = document.querySelector(`#periodId + .btn-group input[value="${v}"]`);
-            if (cb && !cb.checked) cb.click();
+            const labels = [...document.querySelectorAll('#periodId + .btn-group label.checkbox')];
+            const targetLabel = labels.find(l => {
+              const text = l.textContent.trim();
+              return text.startsWith(slot + " (") || text === String(slot);
+            });
+
+            if (targetLabel) {
+              const cb = targetLabel.querySelector('input[type="checkbox"]');
+              if (cb) {
+                if (!cb.checked) cb.click();
+                const realVal = cb.value;
+                const o = sel.querySelector(`option[value="${realVal}"]`);
+                if (o) o.selected = true;
+              }
+            }
           });
           sel.dispatchEvent(new Event("change", { bubbles: true }));
           step(setDate, 500);
