@@ -229,7 +229,6 @@ async function loadSettings() {
       saved = JSON.parse(localStorage.getItem('attendanceSettings') || '{}');
     }
 
-    if (saved.attendanceInput)    document.getElementById('attendanceInput').value    = saved.attendanceInput;
     if (saved.startCol)           document.getElementById('startCol').value           = saved.startCol;
     if (saved.rowStart)           document.getElementById('rowStart').value           = saved.rowStart;
     if (saved.rowEnd)             document.getElementById('rowEnd').value             = saved.rowEnd;
@@ -242,7 +241,6 @@ async function loadSettings() {
 }
 
 function saveSettings() {
-  const input = document.getElementById('attendanceInput').value.trim();
   const sc  = document.getElementById('startCol').value.trim().toUpperCase();
   const rs  = document.getElementById('rowStart').value.trim() || '5';
   const re  = document.getElementById('rowEnd').value.trim();
@@ -253,7 +251,6 @@ function saveSettings() {
   const ps  = document.getElementById('settingsPeriodSlot').value.trim();
 
   const settings = { 
-    attendanceInput: input,
     startCol: sc, rowStart: rs, rowEnd: re,
     settingsClass: cls, settingsSubject: sub, settingsGroup: grp,
     settingsTimeTable: tt, settingsPeriodSlot: ps 
@@ -270,8 +267,8 @@ function saveSettings() {
   } catch(_) {}
 }
 
-// Attach auto-save listeners to all fields
-['attendanceInput', 'startCol', 'rowStart', 'rowEnd', 'settingsClass', 
+// Attach auto-save listeners to formula fields (attendanceInput excluded as requested)
+['startCol', 'rowStart', 'rowEnd', 'settingsClass', 
  'settingsSubject', 'settingsGroup', 'settingsTimeTable', 'settingsPeriodSlot'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', saveSettings);
