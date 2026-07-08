@@ -641,3 +641,121 @@ html, body {
 }
 .template-btn:hover { background: #5b21b6; }
 .template-btn:active { transform: scale(0.97); }
+
+/* ── Submit Option Checkbox ─────────────────────────────── */
+.submit-option-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 10px 0;
+  padding: 8px 12px;
+  background: var(--glass);
+  border: 1px solid var(--glass-bdr);
+  border-radius: 10px;
+}
+.submit-option-wrap input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--violet);
+  width: 14px;
+  height: 14px;
+}
+.submit-option-wrap label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-mid);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ── Unmatched Students Section ─────────────────────────── */
+.unmatched-section {
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px dashed rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius);
+  padding: 10px;
+  margin: 10px 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.unmatched-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b45309;
+  margin-bottom: 4px;
+}
+.unmatched-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+.unmatched-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.unmatched-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border: 1px solid var(--glass-bdr);
+  border-radius: 8px;
+  padding: 6px 10px;
+  gap: 8px;
+}
+.unmatched-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.unmatched-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.unmatched-roll {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: 'SF Mono', monospace;
+}
+.unmatched-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.unmatched-btn {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+.unmatched-btn-p {
+  background: #f0fdf4;
+  color: var(--green);
+  border-color: rgba(5, 150, 105, 0.15);
+}
+.unmatched-btn-p.active {
+  background: var(--green);
+  color: #fff;
+  border-color: var(--green);
+  box-shadow: 0 1px 4px rgba(5, 150, 105, 0.2);
+}
+.unmatched-btn-a {
+  background: #fef2f2;
+  color: var(--red);
+  border-color: rgba(220, 38, 38, 0.15);
+}
+.unmatched-btn-a.active {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+  box-shadow: 0 1px 4px rgba(220, 38, 38, 0.2);
+}

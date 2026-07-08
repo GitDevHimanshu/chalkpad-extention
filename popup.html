@@ -117,6 +117,17 @@
         </tr>
       </table>
 
+      <div class="submit-option-wrap">
+        <input type="checkbox" id="submitToChalkpadCb" checked>
+        <label for="submitToChalkpadCb">Submit to Chalkpad portal</label>
+      </div>
+
+      <div id="unmatchedSection" class="unmatched-section" style="display:none;">
+        <p class="unmatched-title">⚠️ Roll Numbers Missing from Sheet Roster</p>
+        <p class="unmatched-hint">These students exist on Chalkpad but were not found in your config. Choose their status before submitting:</p>
+        <div id="unmatchedList" class="unmatched-list"></div>
+      </div>
+
       <div class="action-bar">
         <button id="submitBtn" class="btn btn-green">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>

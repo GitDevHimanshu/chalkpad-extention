@@ -135,6 +135,7 @@ document.getElementById('closeBtn').onclick        = () => window.parent.postMes
 const handleSubmit = async () => {
   const btn = document.getElementById('submitBtn');
   const originalText = btn.textContent;
+  const shouldSubmit = document.getElementById('submitToChalkpadCb')?.checked !== false;
 
   if (_pendingHistoryEntry) {
     // Show loading state
@@ -161,7 +162,11 @@ const handleSubmit = async () => {
     await new Promise(r => setTimeout(r, 600));
   }
 
-  window.parent.postMessage({ type: 'SUBMIT_ATTENDANCE' }, '*');
+  if (shouldSubmit) {
+    window.parent.postMessage({ type: 'SUBMIT_ATTENDANCE' }, '*');
+  } else {
+    window.parent.postMessage({ type: 'CLOSE_POPUP' }, '*');
+  }
   
   // Restore button just in case
   setTimeout(() => {
@@ -335,6 +340,10 @@ document.getElementById('generateBtn').onclick = () => {
   TEXTJOIN(",",TRUE,
     IFERROR(FILTER($B$${rs}:$B$${re}, CHOOSECOLS($${sc}$${rs}:$ZZ$${re},thisCol)="A"),"")
   )&
+  "],presents:["&
+  TEXTJOIN(",",TRUE,
+    IFERROR(FILTER($B$${rs}:$B$${re}, CHOOSECOLS($${sc}$${rs}:$ZZ$${re},thisCol)="P"),"")
+  )&
   "]}"
 )`;
 
@@ -421,6 +430,43 @@ window.addEventListener('message', (event) => {
       allStudents:   event.data.allStudents || [],
       submittedAt: null
     };
+
+    // Render unmatched students (if any)
+    const unmatchedSection = document.getElementById('unmatchedSection');
+    const unmatchedList = document.getElementById('unmatchedList');
+    const unmatchedStudents = event.data.unmatchedStudents || [];
+
+    if (unmatchedStudents.length > 0) {
+      unmatchedSection.style.display = 'block';
+      unmatchedList.innerHTML = '';
+      unmatchedStudents.forEach(student => {
+        const row = document.createElement('div');
+        row.className = 'unmatched-row';
+        row.innerHTML = `
+          <div class="unmatched-info">
+            <span class="unmatched-name">${student.name || 'Unknown Name'}</span>
+            <span class="unmatched-roll">${student.roll}</span>
+          </div>
+          <div class="unmatched-actions">
+            <button class="unmatched-btn unmatched-btn-p ${!student.isAbsent ? 'active' : ''}" data-index="${student.index}" data-status="P">Present</button>
+            <button class="unmatched-btn unmatched-btn-a ${student.isAbsent ? 'active' : ''}" data-index="${student.index}" data-status="A">Absent</button>
+          </div>
+        `;
+
+        row.querySelectorAll('.unmatched-btn').forEach(btn => {
+          btn.onclick = () => {
+            const index = btn.dataset.index;
+            const status = btn.dataset.status;
+            window.parent.postMessage({ type: 'UPDATE_STUDENT', index: parseInt(index, 10), status }, '*');
+          };
+        });
+
+        unmatchedList.appendChild(row);
+      });
+    } else {
+      unmatchedSection.style.display = 'none';
+      unmatchedList.innerHTML = '';
+    }
 
     showState('state-done');
 

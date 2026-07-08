@@ -20,9 +20,65 @@
   }
 
   let cancelled = false;
+  let currentConfig = null;
+  let currentAbsentees = [];
+  let currentPresents = [];
 
   function removePopup() {
     document.getElementById("attendancePopupFrame")?.remove();
+  }
+
+  function sendCompletedData() {
+    const boxes = document.getElementsByClassName("selectbox_med");
+    const totalStudents = boxes.length - 1;
+
+    let absentRolls = [];
+    let presentCount = 0;
+    let allStudents = [];
+    let unmatchedStudents = [];
+
+    const absenteeSet = new Set(currentAbsentees);
+    const presentSet = new Set(currentPresents);
+
+    for (let i = 1; i < boxes.length; i++) {
+      const parent = boxes[i].parentElement;
+      const sib1 = parent ? parent.previousElementSibling : null;
+      const sib2 = sib1 ? sib1.previousElementSibling : null;
+      if (!sib2) continue;
+
+      const roll = sib2.innerText.trim();
+      const nameCell = sib1;
+      const name = nameCell ? nameCell.innerText.trim() : '';
+      const isAbsent = boxes[i].value.endsWith("|2");
+
+      allStudents.push({ roll, name, status: isAbsent ? 'A' : 'P' });
+
+      if (!absenteeSet.has(roll) && !presentSet.has(roll)) {
+        unmatchedStudents.push({
+          roll,
+          name,
+          index: i,
+          isAbsent
+        });
+      }
+
+      if (isAbsent) {
+        absentRolls.push(roll);
+      } else {
+        presentCount++;
+      }
+    }
+
+    const frame = document.getElementById("attendancePopupFrame");
+    if (frame) frame.contentWindow.postMessage({
+      type: "COMPLETED",
+      config: currentConfig,
+      totalStudents,
+      presentCount,
+      absentRolls,
+      allStudents,
+      unmatchedStudents
+    }, "*");
   }
 
   window.addEventListener("message", (event) => {
@@ -44,6 +100,18 @@
         if (data && data.success) console.log('[Attendance] Saved to server, id:', data.id);
         else console.warn('[Attendance] Server save failed:', data && data.error);
       });
+      return;
+    }
+
+    if (type === "UPDATE_STUDENT") {
+      const { index, status } = event.data;
+      const boxes = document.getElementsByClassName("selectbox_med");
+      if (boxes[index]) {
+        const parts = boxes[index].value.split('|');
+        boxes[index].value = `${parts[0]}|${status === 'A' ? '2' : '1'}`;
+        boxes[index].dispatchEvent(new Event("change", { bubbles: true }));
+        sendCompletedData();
+      }
       return;
     }
 
@@ -104,7 +172,11 @@
     const groupText      = config?.info?.group      || "";
     const timeTableText  = config?.info?.timeTable  || "";
     const periodSlotText = config?.info?.periodSlot || "";
-    const absentees      = (config?.absentees || []).map(String).sort();
+    currentConfig = config;
+    currentAbsentees = (config?.absentees || []).map(String);
+    currentPresents = (config?.presents || []).map(String);
+    const absentees      = currentAbsentees;
+    const presents       = currentPresents;
     const normalize      = s => s.replace(/\s+/g, ' ').trim();
 
     function step(fn, delay) {
@@ -251,51 +323,25 @@
       const boxes = document.getElementsByClassName("selectbox_med");
       const totalStudents = boxes.length - 1;
 
-      if (absentees.length > 0) {
-        let j = 0;
+      if (absentees.length > 0 || presents.length > 0) {
+        const absenteeSet = new Set(absentees);
+        const presentSet = new Set(presents);
         for (let i = 1; i < boxes.length; i++) {
           const roll = boxes[i].parentElement.previousElementSibling
             .previousElementSibling.innerText.trim();
-          if (roll === absentees[j]) {
+          if (absenteeSet.has(roll)) {
             const parts = boxes[i].value.split('|');
             boxes[i].value = `${parts[0]}|2`;
             boxes[i].dispatchEvent(new Event("change", { bubbles: true }));
-            j++;
-            if (j >= absentees.length) break;
+          } else if (presentSet.has(roll)) {
+            const parts = boxes[i].value.split('|');
+            boxes[i].value = `${parts[0]}|1`;
+            boxes[i].dispatchEvent(new Event("change", { bubbles: true }));
           }
         }
       }
 
-      let absentRolls = [];
-      let presentCount = 0;
-      let allStudents = [];
-
-      for (let i = 1; i < boxes.length; i++) {
-        const row  = boxes[i].parentElement.previousElementSibling.previousElementSibling;
-        const roll = row.innerText.trim();
-        // Name is usually the next sibling cell after roll
-        const nameCell = row.nextElementSibling;
-        const name = nameCell ? nameCell.innerText.trim() : '';
-        const isAbsent = boxes[i].value.endsWith("|2");
-
-        allStudents.push({ roll, name, status: isAbsent ? 'A' : 'P' });
-
-        if (isAbsent) {
-          absentRolls.push(roll);
-        } else {
-          presentCount++;
-        }
-      }
-
-      const frame = document.getElementById("attendancePopupFrame");
-      if (frame) frame.contentWindow.postMessage({
-        type: "COMPLETED",
-        config,
-        totalStudents,
-        presentCount,
-        absentRolls,
-        allStudents
-      }, "*");
+      sendCompletedData();
     }
   }
 
