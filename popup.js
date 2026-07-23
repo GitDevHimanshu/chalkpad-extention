@@ -468,6 +468,32 @@ window.addEventListener('message', (event) => {
       unmatchedList.innerHTML = '';
     }
 
+    // Render extra students (if any)
+    const extraSection = document.getElementById('extraSection');
+    const extraList = document.getElementById('extraList');
+    const extraSheetStudents = event.data.extraSheetStudents || [];
+
+    if (extraSheetStudents.length > 0) {
+      extraSection.style.display = 'block';
+      extraList.innerHTML = '';
+      extraSheetStudents.forEach(student => {
+        const row = document.createElement('div');
+        row.className = 'extra-row';
+        const statusClass = student.status === 'A' ? 'extra-status-a' : 'extra-status-p';
+        const statusLabel = student.status === 'A' ? 'Absent' : 'Present';
+        row.innerHTML = `
+          <div class="extra-info">
+            <span class="extra-roll">${student.roll}</span>
+            <span class="extra-status ${statusClass}">${statusLabel} in sheet</span>
+          </div>
+        `;
+        extraList.appendChild(row);
+      });
+    } else {
+      extraSection.style.display = 'none';
+      extraList.innerHTML = '';
+    }
+
     showState('state-done');
 
   } else if (event.data.type === 'PARSE_ERROR') {

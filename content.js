@@ -39,6 +39,7 @@
 
     const absenteeSet = new Set(currentAbsentees);
     const presentSet = new Set(currentPresents);
+    const portalRolls = new Set();
 
     for (let i = 1; i < boxes.length; i++) {
       const parent = boxes[i].parentElement;
@@ -47,6 +48,7 @@
       if (!sib2) continue;
 
       const roll = sib2.innerText.trim();
+      portalRolls.add(roll);
       const nameCell = sib1;
       const name = nameCell ? nameCell.innerText.trim() : '';
       const isAbsent = boxes[i].value.endsWith("|2");
@@ -69,6 +71,18 @@
       }
     }
 
+    const extraSheetStudents = [];
+    currentAbsentees.forEach(roll => {
+      if (!portalRolls.has(roll)) {
+        extraSheetStudents.push({ roll, status: 'A' });
+      }
+    });
+    currentPresents.forEach(roll => {
+      if (!portalRolls.has(roll)) {
+        extraSheetStudents.push({ roll, status: 'P' });
+      }
+    });
+
     const frame = document.getElementById("attendancePopupFrame");
     if (frame) frame.contentWindow.postMessage({
       type: "COMPLETED",
@@ -77,7 +91,8 @@
       presentCount,
       absentRolls,
       allStudents,
-      unmatchedStudents
+      unmatchedStudents,
+      extraSheetStudents
     }, "*");
   }
 
