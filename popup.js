@@ -796,6 +796,85 @@ function renderTabMappingsList() {
       renderTabMappingsList();
     };
   });
+
+  attachAutoSyncKeyNavigation();
+}
+
+function attachAutoSyncKeyNavigation() {
+  const masterUrlInput = document.getElementById('masterSheetUrlInput');
+  const mappingInputs  = Array.from(document.querySelectorAll('#tabMappingsList input'));
+
+  if (masterUrlInput) {
+    masterUrlInput.onkeydown = function(e) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        e.preventDefault();
+        const firstMappingInput = document.querySelector('#tabMappingsList input');
+        if (firstMappingInput) firstMappingInput.focus();
+      }
+    };
+  }
+
+  mappingInputs.forEach(input => {
+    input.onkeydown = function(e) {
+      const idx = parseInt(this.dataset.idx, 10);
+      const field = this.dataset.field;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextInput = document.querySelector(`#tabMappingsList input[data-idx="${idx + 1}"][data-field="${field}"]`);
+        if (nextInput) {
+          nextInput.focus();
+        } else {
+          autoSyncMappings.push({ tabName: '', groupName: '' });
+          saveAutoSyncSettings();
+          renderTabMappingsList();
+          setTimeout(() => {
+            const newlyCreatedInput = document.querySelector(`#tabMappingsList input[data-idx="${idx + 1}"][data-field="${field}"]`);
+            if (newlyCreatedInput) newlyCreatedInput.focus();
+          }, 50);
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (field === 'tabName') {
+          const rightInput = document.querySelector(`#tabMappingsList input[data-idx="${idx}"][data-field="groupName"]`);
+          if (rightInput) rightInput.focus();
+        } else {
+          const nextInput = document.querySelector(`#tabMappingsList input[data-idx="${idx + 1}"][data-field="tabName"]`);
+          if (nextInput) {
+            nextInput.focus();
+          } else {
+            autoSyncMappings.push({ tabName: '', groupName: '' });
+            saveAutoSyncSettings();
+            renderTabMappingsList();
+            setTimeout(() => {
+              const newlyCreatedInput = document.querySelector(`#tabMappingsList input[data-idx="${idx + 1}"][data-field="tabName"]`);
+              if (newlyCreatedInput) newlyCreatedInput.focus();
+            }, 50);
+          }
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (idx === 0) {
+          if (masterUrlInput) masterUrlInput.focus();
+        } else {
+          const prevInput = document.querySelector(`#tabMappingsList input[data-idx="${idx - 1}"][data-field="${field}"]`);
+          if (prevInput) prevInput.focus();
+        }
+      } else if (e.key === 'ArrowRight' && field === 'tabName') {
+        if (this.selectionStart === this.value.length) {
+          e.preventDefault();
+          const rightInput = document.querySelector(`#tabMappingsList input[data-idx="${idx}"][data-field="groupName"]`);
+          if (rightInput) rightInput.focus();
+        }
+      } else if (e.key === 'ArrowLeft' && field === 'groupName') {
+        if (this.selectionStart === 0) {
+          e.preventDefault();
+          const leftInput = document.querySelector(`#tabMappingsList input[data-idx="${idx}"][data-field="tabName"]`);
+          if (leftInput) leftInput.focus();
+        }
+      }
+    };
+  });
 }
 
 function updatePendingSelectionSummary() {
