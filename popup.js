@@ -71,7 +71,7 @@ function updateTeacherBadge(id) {
 /* ════════════════════════════
    TAB NAVIGATION
 ════════════════════════════ */
-const TABS = ['attendance', 'formula', 'sheet', 'history'];
+const TABS = ['attendance', 'formula', 'sheet', 'history', 'autosync'];
 
 function showTab(id) {
   TABS.forEach(t => {
@@ -703,3 +703,358 @@ document.getElementById('histClearBtn').onclick = () => {
   document.getElementById('histSearchClear').style.display = 'none';
   renderHistory('');
 };
+
+/* ════════════════════════════
+   AUTO SYNC MODULE
+════════════════════════════ */
+let autoSyncMappings = [
+  { tabName: 'G8', groupName: 'P25AIML-G8' }
+];
+let currentFetchedPendingSessions = [];
+
+function loadAutoSyncSettings() {
+  const masterUrlInput = document.getElementById('masterSheetUrlInput');
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(['masterSheetUrl', 'autoSyncMappings'], (res) => {
+      if (res.masterSheetUrl && masterUrlInput) {
+        masterUrlInput.value = res.masterSheetUrl;
+      }
+      if (res.autoSyncMappings && Array.isArray(res.autoSyncMappings)) {
+        autoSyncMappings = res.autoSyncMappings;
+      }
+      renderTabMappingsList();
+    });
+  } else {
+    const savedUrl = localStorage.getItem('haziriMasterSheetUrl');
+    const savedMap = localStorage.getItem('haziriAutoSyncMappings');
+    if (savedUrl && masterUrlInput) masterUrlInput.value = savedUrl;
+    if (savedMap) {
+      try { autoSyncMappings = JSON.parse(savedMap); } catch(e){}
+    }
+    renderTabMappingsList();
+  }
+}
+
+function saveAutoSyncSettings() {
+  const masterUrlInput = document.getElementById('masterSheetUrlInput');
+  const url = masterUrlInput ? masterUrlInput.value.trim() : '';
+
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ masterSheetUrl: url, autoSyncMappings: autoSyncMappings }, () => {
+      const btn = document.getElementById('saveSheetUrlBtn');
+      if (btn) {
+        btn.textContent = 'Saved ✓';
+        setTimeout(() => { btn.textContent = 'Save'; }, 1200);
+      }
+    });
+  } else {
+    localStorage.setItem('haziriMasterSheetUrl', url);
+    localStorage.setItem('haziriAutoSyncMappings', JSON.stringify(autoSyncMappings));
+    const btn = document.getElementById('saveSheetUrlBtn');
+    if (btn) {
+      btn.textContent = 'Saved ✓';
+      setTimeout(() => { btn.textContent = 'Save'; }, 1200);
+    }
+  }
+}
+
+function renderTabMappingsList() {
+  const container = document.getElementById('tabMappingsList');
+  if (!container) return;
+
+  if (!autoSyncMappings || autoSyncMappings.length === 0) {
+    container.innerHTML = `<div style="font-size:11px; color:var(--text-muted);">No tab mappings. Click "+ Add Tab" to add one.</div>`;
+    return;
+  }
+
+  container.innerHTML = autoSyncMappings.map((map, idx) => `
+    <div style="display:flex; gap:6px; align-items:center;">
+      <input type="text" class="autosync-input" style="flex:1; font-size:11px; padding:4px 6px;"
+        placeholder="Sheet Tab (e.g. G8)" value="${map.tabName || ''}" data-idx="${idx}" data-field="tabName">
+      <input type="text" class="autosync-input" style="flex:1; font-size:11px; padding:4px 6px;"
+        placeholder="Group (e.g. P25AIML-G8)" value="${map.groupName || ''}" data-idx="${idx}" data-field="groupName">
+      <button class="remove-tab-map-btn btn btn-flat" data-idx="${idx}" style="padding:2px 6px; font-size:11px; color:var(--red);">✕</button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('input').forEach(input => {
+    input.oninput = function() {
+      const idx = parseInt(this.dataset.idx, 10);
+      const field = this.dataset.field;
+      if (autoSyncMappings[idx]) {
+        autoSyncMappings[idx][field] = this.value;
+        saveAutoSyncSettings();
+      }
+    };
+  });
+
+  container.querySelectorAll('.remove-tab-map-btn').forEach(btn => {
+    btn.onclick = function() {
+      const idx = parseInt(this.dataset.idx, 10);
+      autoSyncMappings.splice(idx, 1);
+      saveAutoSyncSettings();
+      renderTabMappingsList();
+    };
+  });
+}
+
+function updatePendingSelectionSummary() {
+  const toolbar = document.getElementById('pendingToolbar');
+  const countEl = document.getElementById('pendingSelectionCount');
+  const batchBtn = document.getElementById('markSelectedBatchBtn');
+  const selectAllCheck = document.getElementById('selectAllPendingCheck');
+
+  const checkboxes = document.querySelectorAll('.pending-card-check-item');
+  const validCheckboxes = Array.from(checkboxes).filter(c => !c.disabled);
+  const checkedItems = Array.from(checkboxes).filter(c => c.checked && !c.disabled);
+
+  if (selectAllCheck) {
+    selectAllCheck.checked = validCheckboxes.length > 0 && checkedItems.length === validCheckboxes.length;
+  }
+
+  if (countEl) {
+    let totalAbs = 0;
+    checkedItems.forEach(cb => {
+      const idx = parseInt(cb.dataset.idx, 10);
+      if (currentFetchedPendingSessions[idx]) {
+        totalAbs += (currentFetchedPendingSessions[idx].absenteeCount || 0);
+      }
+    });
+    countEl.textContent = `${checkedItems.length} selected (${totalAbs} Absentees)`;
+  }
+
+  if (batchBtn) {
+    batchBtn.style.display = checkedItems.length > 0 ? 'flex' : 'none';
+    batchBtn.innerHTML = `⚡ Mark ${checkedItems.length} Selected Session${checkedItems.length > 1 ? 's' : ''} in Batch`;
+  }
+}
+
+async function fetchAndRenderPendingSessions() {
+  const statusMsg = document.getElementById('syncStatusMsg');
+  const emptyMsg  = document.getElementById('pendingQueueEmpty');
+  const listEl    = document.getElementById('pendingQueueList');
+  const fetchBtn  = document.getElementById('syncFetchBtn');
+  const toolbar   = document.getElementById('pendingToolbar');
+  const batchBtn  = document.getElementById('markSelectedBatchBtn');
+  const masterUrlInput = document.getElementById('masterSheetUrlInput');
+
+  const sheetUrl = masterUrlInput ? masterUrlInput.value.trim() : '';
+  if (!sheetUrl) {
+    alert('Please enter a Google Sheet URL first.');
+    return;
+  }
+
+  if (statusMsg) {
+    statusMsg.style.display = 'block';
+    statusMsg.style.color = 'var(--text-muted)';
+    statusMsg.textContent = 'Scanning Google Sheet tabs...';
+  }
+  if (fetchBtn) fetchBtn.disabled = true;
+
+  try {
+    const markedHistory = await new Promise(resolve => {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['markedHistory'], res => resolve(res.markedHistory || {}));
+      } else {
+        try { resolve(JSON.parse(localStorage.getItem('haziriMarkedHistory') || '{}')); } catch(e){ resolve({}); }
+      }
+    });
+
+    const pending = await SheetSync.fetchPendingSessions(sheetUrl, autoSyncMappings, markedHistory);
+    currentFetchedPendingSessions = pending || [];
+
+    if (fetchBtn) fetchBtn.disabled = false;
+
+    if (!pending || pending.length === 0) {
+      if (statusMsg) statusMsg.textContent = '✓ All sessions up to date!';
+      if (emptyMsg) {
+        emptyMsg.style.display = 'block';
+        emptyMsg.innerHTML = '🎉 All sessions in Google Sheet are already marked!';
+      }
+      if (listEl) listEl.innerHTML = '';
+      if (toolbar) toolbar.style.display = 'none';
+      if (batchBtn) batchBtn.style.display = 'none';
+      return;
+    }
+
+    if (emptyMsg) emptyMsg.style.display = 'none';
+    if (statusMsg) statusMsg.textContent = `Found ${pending.length} pending session(s) ready to mark:`;
+    if (toolbar) toolbar.style.display = 'flex';
+
+    if (listEl) {
+      listEl.innerHTML = pending.map((item, idx) => {
+        if (item.error) {
+          return `
+            <div style="padding:8px 10px; border-radius:var(--radius); background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.25); color:var(--red); font-size:11px;">
+              ⚠️ Error in tab <strong>"${item.targetTab}"</strong>: ${item.errorMessage}
+            </div>
+          `;
+        }
+
+        const dateStr = item.date || item.normalizedDate;
+        const periodsStr = Array.isArray(item.period) ? item.period.join(', ') : item.period;
+        const groupStr = item.group || item.mappedGroupName;
+
+        const warningHtml = item.hasMismatch ? `
+          <div style="margin-top:4px; font-size:10px; font-weight:700; color:var(--red); background:#fef2f2; border:1px solid rgba(220,38,38,0.25); padding:3px 6px; border-radius:4px; display:flex; align-items:center; gap:4px;">
+            <span>⚠️ Attendance Error: Sheet has ${item.totalStudentsInTab} students, but column has ${item.recordedTotal} recorded (${item.presentCount} P + ${item.absenteeCount} A). ${Math.abs(item.missingCount)} un-marked in sheet! (Excluded from batch)</span>
+          </div>
+        ` : '';
+
+        return `
+          <div class="pending-card" style="${item.hasMismatch ? 'border-color:rgba(220,38,38,0.3); background:#fff5f5; opacity:0.85;' : ''}">
+            <input type="checkbox" class="pending-card-check pending-card-check-item" data-idx="${idx}" ${item.hasMismatch ? 'disabled title="Disabled due to attendance mismatch in sheet"' : 'checked'}>
+            <div class="pending-card-info">
+              <div class="pending-card-title">
+                📅 ${dateStr} &nbsp;•&nbsp; Period [${periodsStr}]
+              </div>
+              <div class="pending-card-sub">
+                Group: <strong>${groupStr}</strong> &nbsp;•&nbsp; Absentees: <span class="pending-badge-absent">${item.absenteeCount}</span>
+              </div>
+              ${warningHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Wire checkboxes
+      listEl.querySelectorAll('.pending-card-check-item').forEach(cb => {
+        cb.onchange = updatePendingSelectionSummary;
+      });
+
+      updatePendingSelectionSummary();
+    }
+
+  } catch (err) {
+    if (fetchBtn) fetchBtn.disabled = false;
+    if (statusMsg) {
+      statusMsg.style.display = 'block';
+      statusMsg.style.color = 'var(--red)';
+      statusMsg.textContent = 'Error: ' + err.message;
+    }
+  }
+}
+
+// Select All Toggle Handler
+const selectAllCheck = document.getElementById('selectAllPendingCheck');
+if (selectAllCheck) {
+  selectAllCheck.onchange = function() {
+    const isChecked = this.checked;
+    document.querySelectorAll('.pending-card-check-item').forEach(cb => {
+      if (!cb.disabled) {
+        cb.checked = isChecked;
+      }
+    });
+    updatePendingSelectionSummary();
+  };
+}
+
+// Batch Execute Selected Sessions Button Handler
+const markSelectedBatchBtn = document.getElementById('markSelectedBatchBtn');
+if (markSelectedBatchBtn) {
+  markSelectedBatchBtn.onclick = async function() {
+    const checkedBoxes = Array.from(document.querySelectorAll('.pending-card-check-item')).filter(cb => cb.checked);
+    if (checkedBoxes.length === 0) {
+      alert('Please select at least one pending session.');
+      return;
+    }
+
+    const selectedSessions = checkedBoxes.map(cb => currentFetchedPendingSessions[parseInt(cb.dataset.idx, 10)]).filter(Boolean);
+
+    // Get current marked history
+    const markedHistory = await new Promise(resolve => {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['markedHistory'], res => resolve(res.markedHistory || {}));
+      } else {
+        try { resolve(JSON.parse(localStorage.getItem('haziriMarkedHistory') || '{}')); } catch(e){ resolve({}); }
+      }
+    });
+
+    const statusMsg = document.getElementById('syncStatusMsg');
+    markSelectedBatchBtn.disabled = true;
+
+    for (let i = 0; i < selectedSessions.length; i++) {
+      const session = selectedSessions[i];
+      if (statusMsg) {
+        statusMsg.style.display = 'block';
+        statusMsg.style.color = 'var(--violet)';
+        statusMsg.textContent = `🚀 Marking session ${i + 1} of ${selectedSessions.length} (${session.date} - Group ${session.group})...`;
+      }
+
+      // Mark signature in history
+      const sig = session.sig;
+      const grp = session.mappedGroupName || session.group;
+      markedHistory[grp] = markedHistory[grp] || { markedSigs: [] };
+      if (!markedHistory[grp].markedSigs.includes(sig)) {
+        markedHistory[grp].markedSigs.push(sig);
+      }
+
+      // Save updated history
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        await new Promise(r => chrome.storage.local.set({ markedHistory: markedHistory }, r));
+      } else {
+        localStorage.setItem('haziriMarkedHistory', JSON.stringify(markedHistory));
+      }
+
+      // Run automation for first item or load JSON
+      if (i === 0) {
+        const inputEl = document.getElementById('attendanceInput');
+        if (inputEl) inputEl.value = JSON.stringify(session.raw);
+        showTab('attendance');
+        const proceedBtn = document.getElementById('proceedBtn');
+        if (proceedBtn) proceedBtn.click();
+      }
+    }
+
+    markSelectedBatchBtn.disabled = false;
+    const modal = document.getElementById('pendingModal');
+    if (modal) modal.style.display = 'none';
+    alert(`✓ Marked ${selectedSessions.length} session(s) in batch! Marked History has been updated.`);
+  };
+}
+
+// Pending Sessions Modal Controls
+const findPendingBtn = document.getElementById('findPendingSessionsBtn');
+if (findPendingBtn) {
+  findPendingBtn.onclick = function() {
+    const modal = document.getElementById('pendingModal');
+    if (modal) modal.style.display = 'flex';
+    fetchAndRenderPendingSessions();
+  };
+}
+
+const pendingCloseBtn = document.getElementById('pendingModalClose');
+if (pendingCloseBtn) {
+  pendingCloseBtn.onclick = function() {
+    const modal = document.getElementById('pendingModal');
+    if (modal) modal.style.display = 'none';
+  };
+}
+
+const pendingRefreshBtn = document.getElementById('pendingModalRefreshBtn');
+if (pendingRefreshBtn) {
+  pendingRefreshBtn.onclick = function() {
+    fetchAndRenderPendingSessions();
+  };
+}
+
+// Auto Sync Event Listeners
+const saveSheetUrlBtn = document.getElementById('saveSheetUrlBtn');
+if (saveSheetUrlBtn) saveSheetUrlBtn.onclick = saveAutoSyncSettings;
+
+const addTabMappingBtn = document.getElementById('addTabMappingBtn');
+if (addTabMappingBtn) {
+  addTabMappingBtn.onclick = function() {
+    autoSyncMappings.push({ tabName: '', groupName: '' });
+    saveAutoSyncSettings();
+    renderTabMappingsList();
+  };
+}
+
+const syncFetchBtn = document.getElementById('syncFetchBtn');
+if (syncFetchBtn) syncFetchBtn.onclick = fetchAndRenderPendingSessions;
+
+// Load settings on startup
+loadAutoSyncSettings();
+
+

@@ -72,22 +72,26 @@ html, body {
   display: flex;
   background: #fff;
   border-bottom: 1px solid var(--glass-bdr);
-  padding: 5px 8px;
-  gap: 3px;
+  padding: 4px 5px;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.tab-nav::-webkit-scrollbar { display: none; }
 .tab-btn {
-  flex: 1;
-  display: flex; align-items: center; justify-content: center; gap: 4px;
-  padding: 6px 4px;
-  border: none; border-radius: 7px;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+  padding: 5px 2px;
+  border: none; border-radius: 6px;
   background: transparent;
   color: var(--text-muted);
-  font-size: 10px; font-weight: 600;
+  font-size: 9.5px; font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
-.tab-btn svg { opacity: 0.5; flex-shrink: 0; }
+.tab-btn svg { width: 12px; height: 12px; opacity: 0.5; flex-shrink: 0; }
 .tab-btn:hover { background: var(--glass); color: var(--violet); }
 .tab-btn:hover svg { opacity: 1; }
 .tab-btn.active {
@@ -823,3 +827,100 @@ html, body {
   background: #f0fdf4;
   color: var(--green);
 }
+
+/* ── Auto Sync Panel Styles ────────────────────────────── */
+.autosync-container {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.autosync-card {
+  background: #fff;
+  border: 1px solid var(--glass-bdr);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  box-shadow: 0 1px 3px rgba(109,40,217,0.05);
+}
+.autosync-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.autosync-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--violet);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.autosync-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 11px;
+  background: #fff;
+  border: 1px solid var(--glass-bdr);
+  border-radius: 6px;
+  color: var(--text-dark);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.autosync-input:focus {
+  border-color: var(--violet-pale);
+}
+.pending-summary-banner {
+  background: var(--violet-glow);
+  border: 1px solid var(--glass-bdr);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-dark);
+}
+.pending-card {
+  background: #fff;
+  border: 1px solid var(--glass-bdr);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.15s ease;
+}
+.pending-card:hover {
+  border-color: var(--violet-pale);
+  background: rgba(255,255,255,0.95);
+}
+.pending-card-check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--violet);
+  cursor: pointer;
+}
+.pending-card-info {
+  flex: 1;
+}
+.pending-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+.pending-card-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.pending-badge-absent {
+  display: inline-block;
+  background: #fef2f2;
+  color: var(--red);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+

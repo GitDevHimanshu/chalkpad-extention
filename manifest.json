@@ -21,7 +21,8 @@
   "host_permissions": [
     "https://csoethp.codebrigade.in/*",
     "https://chalkpad-attendance.onrender.com/*",
-    "https://cuiet.codebrigade.in/*"
+    "https://cuiet.codebrigade.in/*",
+    "https://docs.google.com/*"
   ],
   "web_accessible_resources": [
     {
@@ -29,7 +30,8 @@
         "popup.html",
         "popup.js",
         "style.css",
-        "template.js"
+        "template.js",
+        "sheetSync.js"
       ],
       "matches": [
         "https://csoethp.codebrigade.in/*",
