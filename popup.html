@@ -59,6 +59,11 @@
 
     <!-- STATE: input -->
     <div id="state-input" class="state">
+      <!-- In-popup Batch Success Banner (no browser alert) -->
+      <div id="batchSuccessBanner" style="display:none; margin-bottom: 10px; padding: 10px 12px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.35); border-radius: 8px; color: #16a34a; font-weight: 700; font-size: 11px; text-align: center;">
+        🎉 Hands-free batch completed! Successfully marked <span id="batchSuccessCount">0</span> session(s) on Chalkpad.
+      </div>
+
       <p class="input-label">Paste config object</p>
       <div class="textarea-wrap">
         <textarea id="attendanceInput" spellcheck="false"
@@ -371,6 +376,13 @@
 
       <div style="font-size: 10px; color: var(--text-muted); line-height: 1.4; padding: 4px; background: var(--violet-glow); border: 1px solid var(--glass-bdr); border-radius: 8px;">
         💡 <strong>How to use:</strong> Save your Sheet URL and Group Mappings here. Then click <strong>"Find Pending Sessions"</strong> on the Attendance tab to fetch and mark classes!
+      </div>
+
+      <!-- Clear Marked Memory Button -->
+      <div style="margin-top: 8px;">
+        <button id="clearMarkedMemoryBtn" class="btn btn-danger-outline" style="width: 100%; padding: 6px; font-size: 11px; font-weight: 600;">
+          🗑️ Reset Marked Sessions Memory
+        </button>
       </div>
 
     </div>

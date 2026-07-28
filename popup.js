@@ -132,7 +132,7 @@ document.getElementById('cancelBtn').onclick       = closePopup;
 document.getElementById('cancelBtn2').onclick      = closePopup;
 document.getElementById('closeBtn').onclick        = () => window.parent.postMessage({ type: 'CLOSE_POPUP' }, '*');
 
-const handleSubmit = async () => {
+const handleSubmit = async (options = {}) => {
   const btn = document.getElementById('submitBtn');
   const originalText = btn.textContent;
   const shouldSubmit = document.getElementById('submitToChalkpadCb')?.checked !== false;
@@ -144,6 +144,7 @@ const handleSubmit = async () => {
 
     _pendingHistoryEntry.submittedAt = new Date().toISOString();
     saveHistoryEntry(_pendingHistoryEntry);
+    await markSessionAsCompletedInHistory(_pendingHistoryEntry.config);
     
     try {
       const res = await postToServer(_pendingHistoryEntry);
@@ -163,7 +164,10 @@ const handleSubmit = async () => {
   }
 
   if (shouldSubmit) {
-    window.parent.postMessage({ type: 'SUBMIT_ATTENDANCE' }, '*');
+    window.parent.postMessage({ 
+      type: 'SUBMIT_ATTENDANCE', 
+      keepPopupOpen: options.keepPopupOpen || _isBatchActive 
+    }, '*');
   } else {
     window.parent.postMessage({ type: 'CLOSE_POPUP' }, '*');
   }
@@ -393,7 +397,70 @@ document.getElementById('copyBtn').onclick = () => {
 ════════════════════════════ */
 let _pendingHistoryEntry = null;
 
-window.addEventListener('message', (event) => {
+// Persistent Hands-free Batch Execution Queue Engine (saved in chrome.storage.local)
+async function startBatchExecution(selectedSessions) {
+  const activeBatch = {
+    queue: selectedSessions,
+    index: 0,
+    isActive: true
+  };
+
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    await new Promise(r => chrome.storage.local.set({ activeBatch }, r));
+  }
+
+  executeCurrentBatchItem(activeBatch);
+}
+
+async function executeCurrentBatchItem(batchData) {
+  if (!batchData || !batchData.isActive || batchData.index >= batchData.queue.length) {
+    const count = batchData && batchData.queue ? batchData.queue.length : 0;
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await new Promise(r => chrome.storage.local.remove('activeBatch', r));
+    }
+    const btn = document.getElementById('markSelectedBatchBtn');
+    if (btn) btn.disabled = false;
+
+    if (count > 0) {
+      const banner = document.getElementById('batchSuccessBanner');
+      const countEl = document.getElementById('batchSuccessCount');
+      if (banner && countEl) {
+        countEl.textContent = count;
+        banner.style.display = 'block';
+      }
+    }
+    showState('state-input');
+    return;
+  }
+
+  const session = batchData.queue[batchData.index];
+  const statusMsg = document.getElementById('syncStatusMsg');
+  if (statusMsg) {
+    statusMsg.style.display = 'block';
+    statusMsg.style.color = 'var(--violet)';
+    statusMsg.textContent = `🚀 Handsfree Batch (${batchData.index + 1}/${batchData.queue.length}): Marking ${session.date} (Group ${session.group})...`;
+  }
+
+  const inputEl = document.getElementById('attendanceInput');
+  if (inputEl) inputEl.value = JSON.stringify(session.raw);
+  showTab('attendance');
+  const proceedBtn = document.getElementById('proceedBtn');
+  if (proceedBtn) proceedBtn.click();
+}
+
+async function checkAndResumeActiveBatch() {
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(['activeBatch'], res => {
+      const activeBatch = res.activeBatch;
+      if (activeBatch && activeBatch.isActive && activeBatch.index < activeBatch.queue.length) {
+        console.log('[Haziri] Resuming active batch at index:', activeBatch.index);
+        setTimeout(() => executeCurrentBatchItem(activeBatch), 800);
+      }
+    });
+  }
+}
+
+window.addEventListener('message', async (event) => {
   if (event.data.type === 'COMPLETED') {
     const config      = event.data.config;
     const periods     = (config?.info?.period || []).join(', ');
@@ -421,7 +488,7 @@ window.addEventListener('message', (event) => {
     document.getElementById('v-present').textContent   = event.data.presentCount ?? '-';
     document.getElementById('v-absentees').textContent = absentText;
 
-    // Cache for saving to history when user actually presses Submit
+    // Cache for saving to history
     _pendingHistoryEntry = {
       config,
       totalStudents: total,
@@ -430,6 +497,35 @@ window.addEventListener('message', (event) => {
       allStudents:   event.data.allStudents || [],
       submittedAt: null
     };
+
+    // Check if running inside active batch
+    const activeBatch = await new Promise(resolve => {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['activeBatch'], res => resolve(res.activeBatch || null));
+      } else {
+        resolve(null);
+      }
+    });
+
+    if (activeBatch && activeBatch.isActive) {
+      // In hands-free batch mode: Auto submit session and increment batch index in storage
+      setTimeout(async () => {
+        await handleSubmit({ keepPopupOpen: true });
+        
+        activeBatch.index++;
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          await new Promise(r => chrome.storage.local.set({ activeBatch }, r));
+        }
+
+        // If batch finished, execute finish check
+        if (activeBatch.index >= activeBatch.queue.length) {
+          setTimeout(() => executeCurrentBatchItem(activeBatch), 1000);
+        }
+      }, 400);
+      return;
+    }
+
+    showState('state-done');
 
     // Render unmatched students (if any)
     const unmatchedSection = document.getElementById('unmatchedSection');
@@ -517,6 +613,49 @@ function saveHistoryEntry(entry) {
     if (history.length > 50) history.length = 50;
     localStorage.setItem('attendanceHistory', JSON.stringify(history));
   } catch(_) {}
+}
+
+async function markSessionAsCompletedInHistory(config) {
+  if (!config || !config.info) return;
+  const dateStr = config.info.date;
+  const periods = Array.isArray(config.info.period) ? config.info.period.join(',') : config.info.period;
+  const grp = config.info.group;
+  
+  if (!dateStr || !periods || !grp) return;
+
+  function normalizeDate(dStr) {
+    if (!dStr) return '';
+    const parts = dStr.split(/[\/-]/);
+    if (parts.length === 3) {
+      let d = parts[0].padStart(2, '0');
+      let m = parts[1].padStart(2, '0');
+      let y = parts[2];
+      if (y.length === 2) y = '20' + y;
+      if (d.length === 4) return `${d}-${m}-${y.padStart(2, '0')}`;
+      return `${y}-${m}-${d}`;
+    }
+    return dStr;
+  }
+
+  const sig = `${normalizeDate(dateStr)}_${periods}_${grp}`;
+
+  const markedHistory = await new Promise(resolve => {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(['markedHistory'], res => resolve(res.markedHistory || {}));
+    } else {
+      resolve({});
+    }
+  });
+
+  markedHistory[grp] = markedHistory[grp] || { markedSigs: [] };
+  if (!markedHistory[grp].markedSigs.includes(sig)) {
+    markedHistory[grp].markedSigs.push(sig);
+  }
+
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    await new Promise(r => chrome.storage.local.set({ markedHistory: markedHistory }, r));
+  }
+  console.log('[Haziri] Session recorded in markedHistory:', sig);
 }
 
 function formatRelativeTime(isoString) {
@@ -935,7 +1074,7 @@ async function fetchAndRenderPendingSessions() {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         chrome.storage.local.get(['markedHistory'], res => resolve(res.markedHistory || {}));
       } else {
-        try { resolve(JSON.parse(localStorage.getItem('haziriMarkedHistory') || '{}')); } catch(e){ resolve({}); }
+        resolve({});
       }
     });
 
@@ -1040,55 +1179,12 @@ if (markSelectedBatchBtn) {
 
     const selectedSessions = checkedBoxes.map(cb => currentFetchedPendingSessions[parseInt(cb.dataset.idx, 10)]).filter(Boolean);
 
-    // Get current marked history
-    const markedHistory = await new Promise(resolve => {
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.get(['markedHistory'], res => resolve(res.markedHistory || {}));
-      } else {
-        try { resolve(JSON.parse(localStorage.getItem('haziriMarkedHistory') || '{}')); } catch(e){ resolve({}); }
-      }
-    });
-
-    const statusMsg = document.getElementById('syncStatusMsg');
     markSelectedBatchBtn.disabled = true;
 
-    for (let i = 0; i < selectedSessions.length; i++) {
-      const session = selectedSessions[i];
-      if (statusMsg) {
-        statusMsg.style.display = 'block';
-        statusMsg.style.color = 'var(--violet)';
-        statusMsg.textContent = `🚀 Marking session ${i + 1} of ${selectedSessions.length} (${session.date} - Group ${session.group})...`;
-      }
-
-      // Mark signature in history
-      const sig = session.sig;
-      const grp = session.mappedGroupName || session.group;
-      markedHistory[grp] = markedHistory[grp] || { markedSigs: [] };
-      if (!markedHistory[grp].markedSigs.includes(sig)) {
-        markedHistory[grp].markedSigs.push(sig);
-      }
-
-      // Save updated history
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        await new Promise(r => chrome.storage.local.set({ markedHistory: markedHistory }, r));
-      } else {
-        localStorage.setItem('haziriMarkedHistory', JSON.stringify(markedHistory));
-      }
-
-      // Run automation for first item or load JSON
-      if (i === 0) {
-        const inputEl = document.getElementById('attendanceInput');
-        if (inputEl) inputEl.value = JSON.stringify(session.raw);
-        showTab('attendance');
-        const proceedBtn = document.getElementById('proceedBtn');
-        if (proceedBtn) proceedBtn.click();
-      }
-    }
-
-    markSelectedBatchBtn.disabled = false;
     const modal = document.getElementById('pendingModal');
     if (modal) modal.style.display = 'none';
-    alert(`✓ Marked ${selectedSessions.length} session(s) in batch! Marked History has been updated.`);
+
+    startBatchExecution(selectedSessions);
   };
 }
 
@@ -1133,7 +1229,21 @@ if (addTabMappingBtn) {
 const syncFetchBtn = document.getElementById('syncFetchBtn');
 if (syncFetchBtn) syncFetchBtn.onclick = fetchAndRenderPendingSessions;
 
-// Load settings on startup
+const clearMarkedMemoryBtn = document.getElementById('clearMarkedMemoryBtn');
+if (clearMarkedMemoryBtn) {
+  clearMarkedMemoryBtn.onclick = async function() {
+    if (confirm('Are you sure you want to reset marked sessions memory? This will make all sheet sessions fetchable again.')) {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        await new Promise(r => chrome.storage.local.set({ markedHistory: {} }, r));
+      }
+      localStorage.removeItem('haziriMarkedHistory');
+      alert('✓ Marked sessions memory has been reset! You can now re-fetch pending sessions.');
+    }
+  };
+}
+
+// Load settings and resume active batch on startup
 loadAutoSyncSettings();
+checkAndResumeActiveBatch();
 
 

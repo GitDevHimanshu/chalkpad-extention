@@ -19,6 +19,17 @@
     };
   }
 
+  // Resilient handsfree alert/confirm bypass on host page
+  try {
+    const s = document.createElement("script");
+    s.textContent = `
+      window.alert = function(msg) { console.log('[Haziri Handsfree] Intercepted alert:', msg); return true; };
+      window.confirm = function(msg) { console.log('[Haziri Handsfree] Intercepted confirm:', msg); return true; };
+    `;
+    (document.head || document.documentElement).appendChild(s);
+    s.remove();
+  } catch(e) {}
+
   let cancelled = false;
   let currentConfig = null;
   let currentAbsentees = [];
@@ -135,9 +146,11 @@
       const submitBtn = document.querySelector('input.submitBtn[onclick*="initData"]');
       if (submitBtn) {
         submitBtn.click();
-        setTimeout(removePopup, 500);
+        if (!event.data?.keepPopupOpen) {
+          setTimeout(removePopup, 500);
+        }
       } else {
-        alert("Submit button not found on page.");
+        console.warn("Submit button not found on page.");
       }
       return;
     }
@@ -198,10 +211,36 @@
       setTimeout(() => { if (!cancelled) fn(); }, delay);
     }
 
-    // Find a radio input by matching label.radio text — same pattern as selectClass/Subject/Group
+    // Find a radio input by matching label.radio text with resilient fuzzy matching
     function findRadioByLabel(groupSelector, text) {
-      const lbl = [...document.querySelectorAll(`${groupSelector} label.radio`)]
-        .find(l => normalize(l.textContent) === normalize(text));
+      if (!text) return null;
+      const labels = [...document.querySelectorAll(`${groupSelector} label.radio`)];
+      if (labels.length === 0) return null;
+
+      const targetNorm = normalize(text);
+      const targetClean = text.replace(/[\s\(\)\-\:_]/g, '').toLowerCase();
+
+      // 1. Exact normalized match
+      let lbl = labels.find(l => normalize(l.textContent) === targetNorm);
+
+      // 2. Cleaned character match (ignoring spaces, hyphens, parens)
+      if (!lbl && targetClean) {
+        lbl = labels.find(l => {
+          const clean = l.textContent.replace(/[\s\(\)\-\:_]/g, '').toLowerCase();
+          return clean === targetClean || clean.includes(targetClean) || targetClean.includes(clean);
+        });
+      }
+
+      // 3. Fallback: Substring match
+      if (!lbl) {
+        lbl = labels.find(l => l.textContent.toLowerCase().includes(text.toLowerCase()) || text.toLowerCase().includes(l.textContent.toLowerCase().trim()));
+      }
+
+      // 4. Fallback: If only 1 radio option exists, use it
+      if (!lbl && labels.length === 1) {
+        lbl = labels[0];
+      }
+
       if (!lbl) return null;
       return lbl.querySelector('input[type="radio"]');
     }
@@ -217,22 +256,36 @@
     }
 
     // STEP 2 — Period Slot (semester): only act if value provided, then proceed to selectPeriods
+    let slotRetries = 0;
     const waitSecond = setInterval(() => {
       if (cancelled) { clearInterval(waitSecond); return; }
+      slotRetries++;
+
       const btn2 = document.querySelector("#periodSlotId + .btn-group .dropdown-toggle");
-      if (btn2) {
-        if (!periodSlotText) {
+      
+      // If no period slot text provided, no button found, or timed out after 8 retries (~3.2s)
+      if (!periodSlotText || !btn2 || slotRetries > 8) {
+        clearInterval(waitSecond);
+        step(selectPeriods, 700);
+        return;
+      }
+
+      btn2.click();
+      setTimeout(() => {
+        if (cancelled) return;
+        const r = findRadioByLabel('#periodSlotId + .btn-group', periodSlotText);
+        if (r) {
+          r.click();
           clearInterval(waitSecond);
           step(selectPeriods, 700);
-          return;
+        } else if (slotRetries >= 5) {
+          // If custom matching failed 5 times, select first available option as fallback
+          const firstRadio = document.querySelector('#periodSlotId + .btn-group label.radio input[type="radio"]');
+          if (firstRadio) firstRadio.click();
+          clearInterval(waitSecond);
+          step(selectPeriods, 700);
         }
-        btn2.click();
-        setTimeout(() => {
-          if (cancelled) return;
-          const r = findRadioByLabel('#periodSlotId + .btn-group', periodSlotText);
-          if (r) { r.click(); clearInterval(waitSecond); step(selectPeriods, 700); }
-        }, 400);
-      }
+      }, 400);
     }, 400);
 
     function selectPeriods() {
@@ -286,14 +339,12 @@
       const sel = document.getElementById("classId");
       document.querySelector("#classId + .btn-group .dropdown-toggle")?.click();
       step(() => {
-        const lbl = [...document.querySelectorAll("#classId + .btn-group label.radio")]
-          .find(l => normalize(l.textContent) === normalize(classText));
-        if (lbl) {
-          const r = lbl.querySelector('input[type="radio"]');
-          if (r) r.click();
+        const r = findRadioByLabel('#classId + .btn-group', classText);
+        if (r) {
+          r.click();
           if (sel) { sel.value = r.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
-          step(selectSubject, 700);
         }
+        step(selectSubject, 700);
       }, 400);
     }
 
@@ -302,14 +353,12 @@
       const sel = document.getElementById("subjectId");
       document.querySelector("#subjectId + .btn-group .dropdown-toggle")?.click();
       step(() => {
-        const lbl = [...document.querySelectorAll("#subjectId + .btn-group label.radio")]
-          .find(l => normalize(l.textContent) === normalize(subjectText));
-        if (lbl) {
-          const r = lbl.querySelector('input[type="radio"]');
-          if (r) r.click();
+        const r = findRadioByLabel('#subjectId + .btn-group', subjectText);
+        if (r) {
+          r.click();
           if (sel) { sel.value = r.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
-          step(selectGroup, 700);
         }
+        step(selectGroup, 700);
       }, 400);
     }
 
@@ -318,14 +367,12 @@
       const sel = document.getElementById("groupId");
       document.querySelector("#groupId + .btn-group .dropdown-toggle")?.click();
       step(() => {
-        const lbl = [...document.querySelectorAll("#groupId + .btn-group label.radio")]
-          .find(l => normalize(l.textContent) === normalize(groupText));
-        if (lbl) {
-          const r = lbl.querySelector('input[type="radio"]');
-          if (r) r.click();
+        const r = findRadioByLabel('#groupId + .btn-group', groupText);
+        if (r) {
+          r.click();
           if (sel) { sel.value = r.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
-          step(showStudentList, 2000);
         }
+        step(showStudentList, 2000);
       }, 400);
     }
 

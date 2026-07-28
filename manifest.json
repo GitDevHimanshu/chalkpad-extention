@@ -46,6 +46,17 @@
         "https://cuiet.codebrigade.in/*"
       ],
       "js": [
+        "bypassAlerts.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://csoethp.codebrigade.in/*",
+        "https://cuiet.codebrigade.in/*"
+      ],
+      "js": [
         "content.js"
       ],
       "css": [
