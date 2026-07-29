@@ -163,10 +163,20 @@ const handleSubmit = async (options = {}) => {
     await new Promise(r => setTimeout(r, 600));
   }
 
+  const activeBatch = await new Promise(resolve => {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(['activeBatch'], res => resolve(res.activeBatch || null));
+    } else {
+      resolve(null);
+    }
+  });
+
+  const isBatch = Boolean(options.keepPopupOpen || (activeBatch && activeBatch.isActive));
+
   if (shouldSubmit) {
     window.parent.postMessage({ 
       type: 'SUBMIT_ATTENDANCE', 
-      keepPopupOpen: options.keepPopupOpen || _isBatchActive 
+      keepPopupOpen: isBatch 
     }, '*');
   } else {
     window.parent.postMessage({ type: 'CLOSE_POPUP' }, '*');
