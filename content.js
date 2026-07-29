@@ -1,4 +1,13 @@
-(function () {
+  function createPopupFrame() {
+    let frame = document.getElementById("attendancePopupFrame");
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.id = "attendancePopupFrame";
+      frame.src = chrome.runtime.getURL("popup.html");
+      document.body.appendChild(frame);
+    }
+    return frame;
+  }
 
   if (!document.getElementById("attendanceFloatingBtn")) {
     const btn = document.createElement("button");
@@ -11,12 +20,23 @@
         cancelled = true;
         existing.remove();
       } else {
-        const frame = document.createElement("iframe");
-        frame.id = "attendancePopupFrame";
-        frame.src = chrome.runtime.getURL("popup.html");
-        document.body.appendChild(frame);
+        createPopupFrame();
       }
     };
+  }
+
+  // Auto-reopen popup frame after submission page reload if batch is actively running
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(['activeBatch'], (res) => {
+      const activeBatch = res.activeBatch;
+      if (activeBatch && activeBatch.isActive && activeBatch.index < activeBatch.queue.length) {
+        const elapsed = Date.now() - (activeBatch.timestamp || 0);
+        if (elapsed < 40000) {
+          console.log('[Haziri Content] Active batch detected on page reload. Auto-opening popup frame for session', activeBatch.index + 1);
+          createPopupFrame();
+        }
+      }
+    });
   }
 
 

@@ -412,7 +412,8 @@ async function startBatchExecution(selectedSessions) {
   const activeBatch = {
     queue: selectedSessions,
     index: 0,
-    isActive: true
+    isActive: true,
+    timestamp: Date.now()
   };
 
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
@@ -462,9 +463,17 @@ async function checkAndResumeActiveBatch() {
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.get(['activeBatch'], res => {
       const activeBatch = res.activeBatch;
-      if (activeBatch && activeBatch.isActive && activeBatch.index < activeBatch.queue.length) {
+      if (!activeBatch || !activeBatch.isActive) return;
+
+      const elapsed = Date.now() - (activeBatch.timestamp || 0);
+      // Only resume if the submission page refresh occurred within the last 40 seconds
+      if (elapsed < 40000 && activeBatch.index < activeBatch.queue.length) {
         console.log('[Haziri] Resuming active batch at index:', activeBatch.index);
         setTimeout(() => executeCurrentBatchItem(activeBatch), 800);
+      } else {
+        // Stale or old batch left behind — remove it!
+        console.log('[Haziri] Wiping stale activeBatch from storage.');
+        chrome.storage.local.remove('activeBatch');
       }
     });
   }
@@ -517,12 +526,13 @@ window.addEventListener('message', async (event) => {
       }
     });
 
-    if (activeBatch && activeBatch.isActive) {
+    if (activeBatch && activeBatch.isActive && (Date.now() - (activeBatch.timestamp || 0) < 40000)) {
       // In hands-free batch mode: Auto submit session and increment batch index in storage
       setTimeout(async () => {
         await handleSubmit({ keepPopupOpen: true });
         
         activeBatch.index++;
+        activeBatch.timestamp = Date.now();
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
           await new Promise(r => chrome.storage.local.set({ activeBatch }, r));
         }
