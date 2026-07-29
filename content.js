@@ -19,16 +19,7 @@
     };
   }
 
-  // Resilient handsfree alert/confirm bypass on host page
-  try {
-    const s = document.createElement("script");
-    s.textContent = `
-      window.alert = function(msg) { console.log('[Haziri Handsfree] Intercepted alert:', msg); return true; };
-      window.confirm = function(msg) { console.log('[Haziri Handsfree] Intercepted confirm:', msg); return true; };
-    `;
-    (document.head || document.documentElement).appendChild(s);
-    s.remove();
-  } catch(e) {}
+
 
   let cancelled = false;
   let currentConfig = null;
