@@ -144,7 +144,6 @@ const handleSubmit = async (options = {}) => {
 
     _pendingHistoryEntry.submittedAt = new Date().toISOString();
     saveHistoryEntry(_pendingHistoryEntry);
-    await markSessionAsCompletedInHistory(_pendingHistoryEntry.config);
     
     try {
       const res = await postToServer(_pendingHistoryEntry);
@@ -155,8 +154,6 @@ const handleSubmit = async (options = {}) => {
     } catch (err) {
       console.error('[Attendance] Server post failed:', err);
     }
-    
-    _pendingHistoryEntry = null;
     
     // Quick success feedback
     btn.textContent = 'Saved ✓';
@@ -179,6 +176,10 @@ const handleSubmit = async (options = {}) => {
       keepPopupOpen: isBatch 
     }, '*');
   } else {
+    if (_pendingHistoryEntry) {
+      await markSessionAsCompletedInHistory(_pendingHistoryEntry.config);
+      _pendingHistoryEntry = null;
+    }
     window.parent.postMessage({ type: 'CLOSE_POPUP' }, '*');
   }
   
@@ -205,7 +206,7 @@ window.addEventListener('keydown', (e) => {
 });
 document.getElementById('alreadyCloseBtn').onclick = () => showState('state-input');
 
-document.getElementById('proceedBtn').onclick = () => {
+document.getElementById('proceedBtn').onclick = async () => {
   const teacherId = (localStorage.getItem('haziriTeacherId') || '').trim();
   const input     = document.getElementById('attendanceInput').value.trim();
   const errorEl   = document.getElementById('error');
@@ -220,6 +221,14 @@ document.getElementById('proceedBtn').onclick = () => {
     errorEl.textContent = 'Config must be a { ... } object.'; return;
   }
   errorEl.textContent = '';
+
+  // If user triggered manually (not batch update), wipe activeBatch from storage so it won't auto-submit
+  if (!_isBatchRunning) {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await new Promise(r => chrome.storage.local.remove('activeBatch', r));
+    }
+  }
+
   showState('state-running');
   window.parent.postMessage({ type: 'RUN_ATTENDANCE', raw: input }, '*');
 };
@@ -406,12 +415,16 @@ document.getElementById('copyBtn').onclick = () => {
    MESSAGES FROM content.js
 ════════════════════════════ */
 let _pendingHistoryEntry = null;
+let _isBatchRunning = false;
 
 // Persistent Hands-free Batch Execution Queue Engine (saved in chrome.storage.local)
 async function startBatchExecution(selectedSessions) {
+  _isBatchRunning = true;
   const activeBatch = {
     queue: selectedSessions,
     index: 0,
+    successCount: 0,
+    failedCount: 0,
     isActive: true,
     timestamp: Date.now()
   };
@@ -425,18 +438,26 @@ async function startBatchExecution(selectedSessions) {
 
 async function executeCurrentBatchItem(batchData) {
   if (!batchData || !batchData.isActive || batchData.index >= batchData.queue.length) {
-    const count = batchData && batchData.queue ? batchData.queue.length : 0;
+    _isBatchRunning = false;
+    const successCount = batchData && batchData.successCount !== undefined ? batchData.successCount : (batchData && batchData.queue ? batchData.queue.length : 0);
+    const failedCount = batchData && batchData.failedCount ? batchData.failedCount : 0;
+    const totalQueue = batchData && batchData.queue ? batchData.queue.length : 0;
+
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       await new Promise(r => chrome.storage.local.remove('activeBatch', r));
     }
     const btn = document.getElementById('markSelectedBatchBtn');
     if (btn) btn.disabled = false;
 
-    if (count > 0) {
+    if (totalQueue > 0) {
       const banner = document.getElementById('batchSuccessBanner');
       const countEl = document.getElementById('batchSuccessCount');
       if (banner && countEl) {
-        countEl.textContent = count;
+        if (failedCount > 0) {
+          banner.innerHTML = `🎉 Hands-free batch completed! Marked <strong id="batchSuccessCount">${successCount} of ${totalQueue}</strong> session(s). <span style="color:var(--red);">(${failedCount} failed)</span>`;
+        } else {
+          banner.innerHTML = `🎉 Hands-free batch completed! Successfully marked <strong id="batchSuccessCount">${successCount}</strong> session(s) on Chalkpad.`;
+        }
         banner.style.display = 'block';
       }
     }
@@ -444,6 +465,7 @@ async function executeCurrentBatchItem(batchData) {
     return;
   }
 
+  _isBatchRunning = true;
   const session = batchData.queue[batchData.index];
   const statusMsg = document.getElementById('syncStatusMsg');
   if (statusMsg) {
@@ -463,17 +485,26 @@ async function checkAndResumeActiveBatch() {
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.get(['activeBatch'], res => {
       const activeBatch = res.activeBatch;
-      if (!activeBatch || !activeBatch.isActive) return;
+      if (!activeBatch || !activeBatch.isActive) {
+        _isBatchRunning = false;
+        return;
+      }
 
       const elapsed = Date.now() - (activeBatch.timestamp || 0);
-      // Only resume if the submission page refresh occurred within the last 40 seconds
-      if (elapsed < 40000 && activeBatch.index < activeBatch.queue.length) {
-        console.log('[Haziri] Resuming active batch at index:', activeBatch.index);
-        setTimeout(() => executeCurrentBatchItem(activeBatch), 800);
+      // Only resume if the submission page refresh occurred within the last 60 seconds
+      if (elapsed < 60000 && activeBatch.index < activeBatch.queue.length) {
+        console.log('[Haziri] Resuming active batch at index:', activeBatch.index, 'of', activeBatch.queue.length);
+        _isBatchRunning = true;
+        setTimeout(() => executeCurrentBatchItem(activeBatch), 1200);
       } else {
-        // Stale or old batch left behind — remove it!
-        console.log('[Haziri] Wiping stale activeBatch from storage.');
-        chrome.storage.local.remove('activeBatch');
+        // Stale or finished batch left behind — remove it!
+        console.log('[Haziri] Finalizing or wiping activeBatch from storage.');
+        _isBatchRunning = false;
+        if (activeBatch.index >= activeBatch.queue.length) {
+          executeCurrentBatchItem(activeBatch);
+        } else {
+          chrome.storage.local.remove('activeBatch');
+        }
       }
     });
   }
@@ -496,7 +527,31 @@ window.addEventListener('message', async (event) => {
     document.getElementById('donePresent').textContent   = event.data.presentCount ?? '-';
     document.getElementById('doneAbsentees').textContent = absentText;
 
-    if (total === -1) { showState('state-already'); return; }
+    if (total === -1) {
+      // Check if running inside active batch
+      const activeBatch = await new Promise(resolve => {
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get(['activeBatch'], res => resolve(res.activeBatch || null));
+        } else {
+          resolve(null);
+        }
+      });
+
+      if (activeBatch && activeBatch.isActive && (Date.now() - (activeBatch.timestamp || 0) < 60000)) {
+        console.log('[Haziri Batch] Student list empty or already marked on portal. Incrementing failed count and advancing.');
+        activeBatch.failedCount = (activeBatch.failedCount || 0) + 1;
+        activeBatch.index++;
+        activeBatch.timestamp = Date.now();
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          await new Promise(r => chrome.storage.local.set({ activeBatch }, r));
+        }
+        setTimeout(() => executeCurrentBatchItem(activeBatch), 600);
+        return;
+      }
+
+      showState('state-already');
+      return;
+    }
 
     document.getElementById('v-class').textContent     = config?.info?.class   || '-';
     document.getElementById('v-subject').textContent   = config?.info?.subject || '-';
@@ -526,21 +581,16 @@ window.addEventListener('message', async (event) => {
       }
     });
 
-    if (activeBatch && activeBatch.isActive && (Date.now() - (activeBatch.timestamp || 0) < 40000)) {
-      // In hands-free batch mode: Auto submit session and increment batch index in storage
+    if (activeBatch && activeBatch.isActive && (Date.now() - (activeBatch.timestamp || 0) < 60000)) {
+      // In hands-free batch mode: Save next index in storage FIRST before page submit/reload
       setTimeout(async () => {
-        await handleSubmit({ keepPopupOpen: true });
-        
         activeBatch.index++;
         activeBatch.timestamp = Date.now();
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
           await new Promise(r => chrome.storage.local.set({ activeBatch }, r));
         }
 
-        // If batch finished, execute finish check
-        if (activeBatch.index >= activeBatch.queue.length) {
-          setTimeout(() => executeCurrentBatchItem(activeBatch), 1000);
-        }
+        await handleSubmit({ keepPopupOpen: true });
       }, 400);
       return;
     }
@@ -611,6 +661,50 @@ window.addEventListener('message', async (event) => {
     }
 
     showState('state-done');
+
+  } else if (event.data.type === 'SUBMIT_SUCCESS') {
+    console.log('[Haziri Popup] Submission confirmed on portal!');
+    if (_pendingHistoryEntry) {
+      await markSessionAsCompletedInHistory(_pendingHistoryEntry.config);
+      _pendingHistoryEntry = null;
+    }
+
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(['activeBatch'], async (res) => {
+        const activeBatch = res.activeBatch;
+        if (activeBatch && activeBatch.isActive) {
+          activeBatch.successCount = (activeBatch.successCount || 0) + 1;
+          await new Promise(r => chrome.storage.local.set({ activeBatch }, r));
+        }
+      });
+    }
+
+  } else if (event.data.type === 'SUBMIT_ERROR') {
+    const errorMsg = event.data.error || 'Failed to submit attendance on Chalkpad.';
+    console.error('[Haziri Popup]', errorMsg);
+
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(['activeBatch'], async (res) => {
+        const activeBatch = res.activeBatch;
+        if (activeBatch && activeBatch.isActive) {
+          activeBatch.failedCount = (activeBatch.failedCount || 0) + 1;
+          activeBatch.isActive = false; // Stop batch execution on submission failure
+          await new Promise(r => chrome.storage.local.set({ activeBatch }, r));
+        }
+      });
+    }
+
+    _isBatchRunning = false;
+    const syncStatusMsg = document.getElementById('syncStatusMsg');
+    if (syncStatusMsg) {
+      syncStatusMsg.style.display = 'block';
+      syncStatusMsg.style.color = 'var(--red, #e74c3c)';
+      syncStatusMsg.textContent = `❌ ${errorMsg}`;
+    }
+    const errorEl = document.getElementById('error');
+    if (errorEl) {
+      errorEl.textContent = errorMsg;
+    }
 
   } else if (event.data.type === 'PARSE_ERROR') {
     showState('state-input');

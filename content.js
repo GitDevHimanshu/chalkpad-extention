@@ -1,3 +1,5 @@
+(function () {
+
   function createPopupFrame() {
     let frame = document.getElementById("attendancePopupFrame");
     if (!frame) {
@@ -31,7 +33,7 @@
       const activeBatch = res.activeBatch;
       if (activeBatch && activeBatch.isActive && activeBatch.index < activeBatch.queue.length) {
         const elapsed = Date.now() - (activeBatch.timestamp || 0);
-        if (elapsed < 40000) {
+        if (elapsed < 60000) {
           console.log('[Haziri Content] Active batch detected on page reload. Auto-opening popup frame for session', activeBatch.index + 1);
           createPopupFrame();
         }
@@ -153,15 +155,85 @@
     }
 
 
+  function findSubmitButton() {
+    // Priority 1: Exact class and onclick attribute matching initData
+    let btn = document.querySelector('input.submitBtn[onclick*="initData"]');
+    if (btn) return btn;
+
+    // Priority 2: Any element with class submitBtn and onclick containing initData
+    btn = document.querySelector('.submitBtn[onclick*="initData"], [onclick*="initData"]');
+    if (btn) return btn;
+
+    // Priority 3: Any input/button with submitBtn class (excluding fetch button #submitAttendance)
+    const submitBtns = [...document.querySelectorAll('.submitBtn')];
+    btn = submitBtns.find(b => b.id !== 'submitAttendance' && b.id !== 'attendanceFloatingBtn');
+    if (btn) return btn;
+
+    // Priority 4: Look for save/submit buttons by value, text, name, src or onclick
+    const allBtns = [...document.querySelectorAll('input[type="button"], input[type="image"], input[type="submit"], button')];
+    btn = allBtns.find(b => {
+      if (b.id === 'submitAttendance' || b.id === 'attendanceFloatingBtn') return false;
+      const onclickStr = (b.getAttribute('onclick') || '').toLowerCase();
+      const valueStr = (b.value || b.textContent || '').toLowerCase();
+      const nameStr = (b.name || b.id || '').toLowerCase();
+      const srcStr = (b.src || '').toLowerCase();
+      return onclickStr.includes('initdata') || onclickStr.includes('save') || onclickStr.includes('submit') || onclickStr.includes('insert') ||
+             valueStr.includes('save') || valueStr.includes('submit') || nameStr.includes('save') || nameStr.includes('submit') ||
+             srcStr.includes('save') || srcStr.includes('submit');
+    });
+
+    return btn;
+  }
+
     if (type === "SUBMIT_ATTENDANCE") {
-      const submitBtn = document.querySelector('input.submitBtn[onclick*="initData"]');
+      const submitBtn = findSubmitButton();
+      const frame = document.getElementById("attendancePopupFrame");
+
       if (submitBtn) {
+        console.log("[Haziri Content] Executing submission click on:", submitBtn);
+
+        try {
+          if (typeof submitBtn.onclick === 'function') {
+            submitBtn.onclick();
+          }
+        } catch (e) {
+          console.warn("[Haziri Content] Error calling submitBtn.onclick():", e);
+        }
+
         submitBtn.click();
+
+        // Fallback: If submitBtn belongs to a form, submit after short delay if click didn't trigger navigation
+        if (submitBtn.form) {
+          setTimeout(() => {
+            try {
+              if (typeof submitBtn.form.onsubmit === 'function') {
+                submitBtn.form.onsubmit();
+              }
+              submitBtn.form.submit();
+            } catch (e) {
+              console.warn("[Haziri Content] Error calling submitBtn.form.submit():", e);
+            }
+          }, 300);
+        }
+
+        if (frame && frame.contentWindow) {
+          frame.contentWindow.postMessage({ type: "SUBMIT_SUCCESS" }, "*");
+        }
+
         if (!event.data?.keepPopupOpen) {
           setTimeout(removePopup, 500);
         }
       } else {
-        console.warn("Submit button not found on page.");
+        console.error("[Haziri Content] Submit button not found on Chalkpad page.");
+        if (frame && frame.contentWindow) {
+          frame.contentWindow.postMessage({
+            type: "SUBMIT_ERROR",
+            error: "Submit button not found on Chalkpad page. Please make sure student list is loaded."
+          }, "*");
+        }
+        if (!event.data?.keepPopupOpen) {
+          removePopup();
+        }
       }
       return;
     }
@@ -394,14 +466,19 @@
 
     function markAbsentees() {
       const boxes = document.getElementsByClassName("selectbox_med");
-      const totalStudents = boxes.length - 1;
 
       if (absentees.length > 0 || presents.length > 0) {
         const absenteeSet = new Set(absentees);
         const presentSet = new Set(presents);
         for (let i = 1; i < boxes.length; i++) {
-          const roll = boxes[i].parentElement.previousElementSibling
-            .previousElementSibling.innerText.trim();
+          const parent = boxes[i]?.parentElement;
+          const sib1 = parent ? parent.previousElementSibling : null;
+          const sib2 = sib1 ? sib1.previousElementSibling : null;
+          if (!sib2) continue;
+
+          const roll = sib2.innerText ? sib2.innerText.trim() : '';
+          if (!roll) continue;
+
           if (absenteeSet.has(roll)) {
             const parts = boxes[i].value.split('|');
             boxes[i].value = `${parts[0]}|2`;
