@@ -21,8 +21,7 @@
   "host_permissions": [
     "https://csoethp.codebrigade.in/*",
     "https://chalkpad-attendance.onrender.com/*",
-    "https://cuiet.codebrigade.in/*",
-    "https://docs.google.com/*"
+    "https://cuiet.codebrigade.in/*"
   ],
   "web_accessible_resources": [
     {
@@ -30,8 +29,7 @@
         "popup.html",
         "popup.js",
         "style.css",
-        "template.js",
-        "sheetSync.js"
+        "template.js"
       ],
       "matches": [
         "https://csoethp.codebrigade.in/*",
@@ -40,17 +38,6 @@
     }
   ],
   "content_scripts": [
-    {
-      "matches": [
-        "https://csoethp.codebrigade.in/*",
-        "https://cuiet.codebrigade.in/*"
-      ],
-      "js": [
-        "bypassAlerts.js"
-      ],
-      "world": "MAIN",
-      "run_at": "document_start"
-    },
     {
       "matches": [
         "https://csoethp.codebrigade.in/*",

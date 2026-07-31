@@ -34,10 +34,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
       Attendance
     </button>
-    <button class="tab-btn" data-tab="autosync">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
-      Auto Sync
-    </button>
     <button class="tab-btn" data-tab="formula">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="m4 6 2-2 2 2"/><path d="M6 4v14.5"/><path d="m20 6-2-2-2 2"/><path d="M18 4v14.5"/><path d="M4 20h8"/><path d="M14 20h6"/><path d="M4 14h4"/><path d="M14 10h6"/></svg>
       Formula
@@ -59,11 +55,6 @@
 
     <!-- STATE: input -->
     <div id="state-input" class="state">
-      <!-- In-popup Batch Success Banner (no browser alert) -->
-      <div id="batchSuccessBanner" style="display:none; margin-bottom: 10px; padding: 10px 12px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.35); border-radius: 8px; color: #16a34a; font-weight: 700; font-size: 11px; text-align: center;">
-        🎉 Hands-free batch completed! Successfully marked <span id="batchSuccessCount">0</span> session(s) on Chalkpad.
-      </div>
-
       <p class="input-label">Paste config object</p>
       <div class="textarea-wrap">
         <textarea id="attendanceInput" spellcheck="false"
@@ -77,14 +68,6 @@
           Run Automation
         </button>
         <button id="cancelBtn" class="btn btn-flat">Dismiss</button>
-      </div>
-
-      <!-- Find Pending Sessions Action Button -->
-      <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--glass-bdr);">
-        <button id="findPendingSessionsBtn" class="btn btn-green btn-full" style="padding: 9px; font-weight: 700; font-size: 11px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <span>Find Pending Sessions (Google Sheet)</span>
-        </button>
       </div>
     </div>
 
@@ -117,7 +100,7 @@
         <tr><td id="doneAbsentees"></td></tr>
       </table>
 
-      <h3 class="done-heading">Ready to Save & Submit</h3>
+      <h3 class="done-heading">Ready to Submit</h3>
 
       <table class="info-table">
         <tr><td class="it-label">Class</td><td class="it-val" id="v-class">—</td></tr>
@@ -154,7 +137,7 @@
       <div class="action-bar">
         <button id="submitBtn" class="btn btn-green">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
-          Save & Submit
+          Submit
         </button>
         <button id="closeBtn" class="btn btn-flat">Close</button>
       </div>
@@ -350,45 +333,6 @@
   </div>
 
   <!-- ══════════════════════════════
-       TAB: AUTO SYNC CONFIG
-  ══════════════════════════════ -->
-  <div id="tab-autosync" class="tab-panel" style="display:none;">
-    <div class="autosync-container">
-
-      <!-- Master Sheet URL Configuration -->
-      <div class="autosync-card">
-        <div class="autosync-card-header">
-          <span class="autosync-card-title">Google Sheet URL</span>
-          <button id="saveSheetUrlBtn" class="btn btn-accent" style="padding: 3px 8px; font-size: 10px;">Save</button>
-        </div>
-        <input type="text" id="masterSheetUrlInput" class="autosync-input"
-          placeholder="https://docs.google.com/spreadsheets/d/..." spellcheck="false">
-      </div>
-
-      <!-- Group to Tab Mappings -->
-      <div class="autosync-card">
-        <div class="autosync-card-header">
-          <span class="autosync-card-title">Group Tabs Mapping</span>
-          <button id="addTabMappingBtn" class="btn btn-flat" style="padding: 3px 8px; font-size: 10px;">+ Add Tab</button>
-        </div>
-        <div id="tabMappingsList" style="display:flex; flex-direction:column; gap:6px;"></div>
-      </div>
-
-      <div style="font-size: 10px; color: var(--text-muted); line-height: 1.4; padding: 4px; background: var(--violet-glow); border: 1px solid var(--glass-bdr); border-radius: 8px;">
-        💡 <strong>How to use:</strong> Save your Sheet URL and Group Mappings here. Then click <strong>"Find Pending Sessions"</strong> on the Attendance tab to fetch and mark classes!
-      </div>
-
-      <!-- Clear Marked Memory Button -->
-      <div style="margin-top: 8px;">
-        <button id="clearMarkedMemoryBtn" class="btn btn-danger-outline" style="width: 100%; padding: 6px; font-size: 11px; font-weight: 600;">
-          🗑️ Reset Marked Sessions Memory
-        </button>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════
        FORMULA MODAL OVERLAY
   ══════════════════════════════ -->
   <div id="formulaModal" class="modal-overlay" style="display:none;" aria-modal="true">
@@ -408,53 +352,6 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════
-       PENDING SESSIONS MODAL OVERLAY
-  ══════════════════════════════ -->
-  <div id="pendingModal" class="modal-overlay" style="display:none;" aria-modal="true">
-    <div class="modal-box" style="width: 360px; max-height: 480px; display: flex; flex-direction: column;">
-      
-      <!-- Modal Header -->
-      <div class="modal-header" style="margin-bottom: 8px; display:flex; align-items:center; justify-content:space-between;">
-        <div style="display:flex; align-items:center; gap:6px;">
-          <span class="modal-title">Pending Sessions</span>
-          <button id="pendingModalRefreshBtn" class="btn btn-flat" style="padding:2px 6px; font-size:10px;" title="Rescan Google Sheet">↻ Refresh</button>
-        </div>
-        <button id="pendingModalClose" class="modal-close" title="Close">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-
-      <!-- Top Action Toolbar -->
-      <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;">
-        <div id="syncStatusMsg" style="font-size: 11px; color: var(--text-muted); display: none;"></div>
-
-        <div id="pendingToolbar" class="pending-summary-banner" style="display: none;">
-          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 700; font-size: 11px;">
-            <input type="checkbox" id="selectAllPendingCheck" class="pending-card-check">
-            <span>Select All</span>
-          </label>
-          <span id="pendingSelectionCount" style="font-size: 11px; color: var(--violet); font-weight: 700;">0 selected</span>
-        </div>
-
-        <!-- MARK SELECTED BATCH BUTTON ON TOP -->
-        <button id="markSelectedBatchBtn" class="btn btn-green btn-full" style="display: none; padding: 8px; font-size: 11px; font-weight: 700;">
-          ⚡ Mark Selected Sessions in Batch
-        </button>
-      </div>
-
-      <!-- Pending Sessions Queue List (Scrollable Area) -->
-      <div style="flex: 1; overflow-y: auto; padding-right: 2px;">
-        <div id="pendingQueueEmpty" style="text-align: center; padding: 20px 10px; color: var(--text-muted); font-size: 11px; line-height: 1.5;">
-          Scanning Google Sheet...
-        </div>
-        <div id="pendingQueueList" style="display: flex; flex-direction: column; gap: 6px;"></div>
-      </div>
-
-    </div>
-  </div>
-
-  <script src="sheetSync.js"></script>
   <script src="template.js"></script>
   <script src="popup.js"></script>
 </body>
